@@ -1,0 +1,6 @@
+{
+  "name": "PataPair",
+  "description": "Odisha land-record (Patta/Khatiyan) and Aadhaar cross-script document pairing, OCR diagnosis, and manual review system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
