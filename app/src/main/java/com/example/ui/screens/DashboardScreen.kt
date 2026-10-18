@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.TableChart
@@ -93,6 +94,8 @@ fun DashboardScreen(
     val progress by viewModel.processingProgress.collectAsState()
     val processingMessage by viewModel.processingMessage.collectAsState()
     val ocrModelStatus by viewModel.ocrModelStatus.collectAsState()
+    val aiStatus by viewModel.aiStatus.collectAsState()
+    val retrySummary by viewModel.retrySummary.collectAsState()
 
     var selectedDocumentForDiagnostic by remember { mutableStateOf<DocumentRecord?>(null) }
     var showSeedConfirmDialog by remember { mutableStateOf(false) }
@@ -403,35 +406,112 @@ fun DashboardScreen(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF2E7D32),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Odia OCR Model Installed (${"%.1f".format(ocrModelStatus.odiaSizeMb)} MB)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1B5E20)
+                                )
+                            }
+
+                            TextButton(
+                                onClick = { modelPickerLauncher.launch(arrayOf("*/*")) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text("Update Models", fontSize = 11.sp, color = Color(0xFF1B5E20))
+                            }
+                        }
+
+                        if (ocrModelStatus.isOdiaVerified) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "✓ Tesseract verified with ori.traineddata: \"${ocrModelStatus.odiaSampleOutput}\"",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF15803D),
+                                fontWeight = FontWeight.Medium
+                            )
+                        } else if (ocrModelStatus.odiaVerificationMessage.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "⚠ Verification: ${ocrModelStatus.odiaVerificationMessage}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFB45309),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // AI Interpretation & Privacy Status Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("card_ai_engine_status"),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.CheckCircle,
+                                Icons.Default.Psychology,
                                 contentDescription = null,
-                                tint = Color(0xFF2E7D32),
+                                tint = Color(0xFF0F766E),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Odia OCR Model Installed (${"%.1f".format(ocrModelStatus.odiaSizeMb)} MB)",
+                                text = "AI Engine: ${aiStatus.modelName}",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1B5E20)
+                                color = Color(0xFF0F766E)
                             )
                         }
+                        Text(
+                            text = if (aiStatus.isAvailable) "Active with Odia verification fallback" else "Offline Rulebook Active • 100% On-Device & Private",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF475569)
+                        )
+                    }
 
-                        TextButton(
-                            onClick = { modelPickerLauncher.launch(arrayOf("*/*")) },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text("Update Models", fontSize = 11.sp, color = Color(0xFF1B5E20))
-                        }
+                    Surface(
+                        color = Color(0xFFE2E8F0),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "Zero Cloud Leakage",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF1E293B),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
@@ -560,6 +640,44 @@ fun DashboardScreen(
                             ) {
                                 Icon(Icons.Default.Pause, contentDescription = "Pause", tint = MaterialTheme.colorScheme.primary)
                             }
+                        }
+                    }
+                }
+            }
+
+            retrySummary?.let { summary ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("card_retry_summary"),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE0F2FE)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF0369A1),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.clearRetrySummary() },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Cancel,
+                                contentDescription = "Dismiss",
+                                tint = Color(0xFF0369A1),
+                                modifier = Modifier.size(14.dp)
+                            )
                         }
                     }
                 }

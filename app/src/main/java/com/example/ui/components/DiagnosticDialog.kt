@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +56,7 @@ import com.example.model.DocType
 import com.example.model.DocumentRecord
 import org.json.JSONArray
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun DiagnosticDialog(
     document: DocumentRecord,
@@ -113,10 +116,10 @@ fun DiagnosticDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 // Status & DocType Badges
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
                         color = when (document.docType) {
@@ -224,9 +227,13 @@ fun DiagnosticDialog(
                         Text("2. Classification Scores & Rule Audit", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("• Reason: ${document.classificationReason.ifEmpty { "Pending classification" }}", style = MaterialTheme.typography.bodySmall)
-                        Text("• Confidence Score: ${(document.classificationScore * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+                        Text("• Classification Score: ${document.classificationScore.toInt()} pts (Heuristic rule sum; threshold: 35 for Land, 50 for Aadhaar)", style = MaterialTheme.typography.bodySmall)
 
-                        if (document.khataNumber != null || document.plotNumber != null) {
+                        if (document.docType == DocType.LAND_RECORD) {
+                            val khataDisplay = document.khataNumber ?: "Not identified in OCR text"
+                            val plotDisplay = document.plotNumber ?: "Not identified in OCR text"
+                            Text("• Extracted Land IDs: Khata: $khataDisplay | Plot: $plotDisplay", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        } else if (document.khataNumber != null || document.plotNumber != null) {
                             Text("• Extracted Land IDs: Khata ${document.khataNumber ?: "N/A"} | Plot ${document.plotNumber ?: "N/A"}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
 
@@ -268,38 +275,53 @@ fun DiagnosticDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = DividerDefaults.color)
 
-                // Actions: Rotate, Reprocess, Manual Reclassification
-                Row(
+                // Actions: Rotate, Reprocess, Manual Reclassification (Responsive Layout)
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = onRotate,
-                        modifier = Modifier.testTag("btn_rotate_doc")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        @Suppress("DEPRECATION")
-                        Icon(Icons.Default.RotateRight, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Rotate 90°", fontSize = 12.sp)
+                        OutlinedButton(
+                            onClick = onRotate,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_rotate_doc"),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            @Suppress("DEPRECATION")
+                            Icon(Icons.Default.RotateRight, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Rotate 90°", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = onReprocess,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("btn_reprocess_doc"),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reprocess OCR", fontSize = 12.sp)
+                        }
                     }
 
-                    OutlinedButton(
-                        onClick = onReprocess,
-                        modifier = Modifier.testTag("btn_reprocess_doc")
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Reprocess OCR", fontSize = 12.sp)
-                    }
-
-                    Box {
+                    Box(modifier = Modifier.fillMaxWidth()) {
                         Button(
                             onClick = { showReclassifyMenu = true },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            modifier = Modifier.testTag("btn_reclassify_doc")
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_reclassify_doc"),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                         ) {
-                            Text("Reclassify", fontSize = 12.sp)
+                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Manual Reclassification", fontSize = 12.sp)
                         }
 
                         DropdownMenu(

@@ -401,13 +401,17 @@ class PataDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     fun updateMatchPairStatus(pairId: String, newStatus: MatchStatus) {
         val db = writableDatabase
         var personCode: String? = null
+        var aPersonId: String? = null
+        var lPersonId: String? = null
 
         if (newStatus == MatchStatus.VERIFIED) {
             // Assign sequential Person_001 code if not already assigned
-            val cursor = db.query(TABLE_MATCH_PAIRS, arrayOf("person_code"), "id = ?", arrayOf(pairId), null, null, null)
+            val cursor = db.query(TABLE_MATCH_PAIRS, arrayOf("person_code", "aadhaar_person_id", "land_person_id"), "id = ?", arrayOf(pairId), null, null, null)
             cursor.use {
                 if (it.moveToNext()) {
                     personCode = it.getString(0)
+                    aPersonId = it.getString(1)
+                    lPersonId = it.getString(2)
                 }
             }
 
@@ -424,6 +428,20 @@ class PataDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                     }
                 }
                 personCode = "Person_%03d".format(nextNum)
+            }
+
+            // Incompatible assignment prevention: if a person is verified in this pair,
+            // move any other SUGGESTED candidate for that same person to NEEDS_REVIEW
+            if (!aPersonId.isNullOrBlank() && !lPersonId.isNullOrBlank()) {
+                val conflictValues = ContentValues().apply {
+                    put("status", MatchStatus.NEEDS_REVIEW.name)
+                }
+                db.update(
+                    TABLE_MATCH_PAIRS,
+                    conflictValues,
+                    "(aadhaar_person_id = ? OR land_person_id = ?) AND id != ? AND status = ?",
+                    arrayOf(aPersonId, lPersonId, pairId, MatchStatus.SUGGESTED.name)
+                )
             }
         }
 

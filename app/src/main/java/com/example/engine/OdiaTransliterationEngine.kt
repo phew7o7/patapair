@@ -76,6 +76,27 @@ object OdiaTransliterationEngine {
         '\u0B03' to "h"   // ଃ Visarga
     )
 
+    val ODIA_DIGITS_MAP = mapOf(
+        '୦' to '0',
+        '୧' to '1',
+        '୨' to '2',
+        '୩' to '3',
+        '୪' to '4',
+        '୫' to '5',
+        '୬' to '6',
+        '୭' to '7',
+        '୮' to '8',
+        '୯' to '9'
+    )
+
+    fun convertOdiaDigitsToAscii(input: String): String {
+        val sb = java.lang.StringBuilder()
+        for (ch in input) {
+            sb.append(ODIA_DIGITS_MAP[ch] ?: ch)
+        }
+        return sb.toString()
+    }
+
     private const val VIRAMA = '\u0B4D' // ୍ Halant
 
     fun detectScript(text: String): ScriptType {
@@ -130,9 +151,17 @@ object OdiaTransliterationEngine {
                         continue
                     }
                     else -> {
+                        val isWordStart = (i == 0) || (i > 0 && text[i - 1].isWhitespace())
                         val isWordEnd = (i + 1 >= len) || text[i + 1].isWhitespace()
-                        val hasFollowingConsonantWithMatra = (i + 2 < len) && ODIA_CONSONANTS.containsKey(text[i + 1]) && ODIA_MATRAS.containsKey(text[i + 2])
-                        if (isWordEnd || hasFollowingConsonantWithMatra) {
+                        val isConjunctEndingWithR = (i > 0 && text[i - 1] == VIRAMA && base == "r")
+                        val hasFollowingConsonantWithMatra = (i + 2 < len) &&
+                                ODIA_CONSONANTS.containsKey(text[i + 1]) &&
+                                ODIA_MATRAS.containsKey(text[i + 2]) &&
+                                text[i + 1] != '\u0B39' // not 'h' (e.g. Maha)
+
+                        if (isWordEnd && !isConjunctEndingWithR) {
+                            sb.append(base)
+                        } else if (hasFollowingConsonantWithMatra && !isWordStart) {
                             sb.append(base)
                         } else {
                             sb.append(base).append("a")
@@ -181,6 +210,7 @@ object OdiaTransliterationEngine {
 
         // Common Odia phonetic and spelling normalizations
         n = n.replace("omakara", "omkar")
+        n = n.replace("omakar", "omkar")
         n = n.replace("omkara", "omkar")
         n = n.replace("ratha", "rath")
         n = n.replace("\\bnaik\\b".toRegex(), "nayak")
@@ -189,7 +219,7 @@ object OdiaTransliterationEngine {
         n = n.replace("pattanaik", "patnaik")
         n = n.replace("pattnaik", "patnaik")
         n = n.replace("mahapatra", "mohapatra")
-        n = n.replace("routray", "rout")
+        // Note: routray and rout are distinct Odia surnames; do not collapse them
         n = n.replace("sahu", "sahoo")
         n = n.replace("dash", "das")
         n = n.replace("tripathy", "tripathi")

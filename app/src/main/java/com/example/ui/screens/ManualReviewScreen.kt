@@ -20,9 +20,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -39,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -66,6 +71,8 @@ import com.example.model.DocumentRecord
 import com.example.model.MatchPairRecord
 import com.example.model.MatchStatus
 import com.example.model.PersonRecord
+import com.example.model.getConflictingEvidence
+import com.example.model.getSupportingEvidence
 import com.example.viewmodel.PataPairViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,6 +84,8 @@ fun ManualReviewScreen(
     val matchPairs by viewModel.matchPairs.collectAsState()
     val documents by viewModel.documents.collectAsState()
     val persons by viewModel.persons.collectAsState()
+    val aiStatus by viewModel.aiStatus.collectAsState()
+    val diagnostics by viewModel.matchingDiagnostics.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var editingPerson by remember { mutableStateOf<PersonRecord?>(null) }
@@ -135,6 +144,111 @@ fun ManualReviewScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // AI-Assisted Status Banner
+            Surface(
+                color = Color(0xFFF1F5F9),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Psychology,
+                            contentDescription = null,
+                            tint = Color(0xFF0F766E),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (aiStatus.isAvailable) "AI Multi-Signal Interpretation Active" else "Rulebook Engine Active (100% On-Device)",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF0F766E)
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = Color(0xFF0369A1),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Private & Local",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF0369A1)
+                        )
+                    }
+                }
+            }
+
+            // Matching Pipeline Diagnostic Summary Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Pipeline Diagnostics",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = { viewModel.reprocessUnextractedDocuments() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp).testTag("btn_reparse_records")
+                            ) {
+                                Text("Re-parse", fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = { viewModel.generateMatchSuggestions() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp).testTag("btn_rerun_matcher")
+                            ) {
+                                Text("Re-run", fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• Eligible Records: ${diagnostics.eligibleAadhaarCount} Aadhaar (${diagnostics.missingNameAadhaarCount} missing names) | ${diagnostics.eligibleLandCount} Land Records (${diagnostics.missingNameLandCount} missing names)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "• Candidate Evaluation: ${diagnostics.totalCandidatesEvaluated} pairs evaluated | ${diagnostics.candidatesRejectedByFilters} rejected by surname/similarity filters",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "• Candidate Triage: ${diagnostics.candidatesSuggested} suggested, ${diagnostics.candidatesNeedsReview} need review, ${diagnostics.candidatesVerified} verified by user",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             TabRow(
                 selectedTabIndex = selectedTabIndex,
                 modifier = Modifier.fillMaxWidth()
@@ -152,7 +266,7 @@ fun ManualReviewScreen(
                 Tab(
                     selected = selectedTabIndex == 2,
                     onClick = { selectedTabIndex = 2 },
-                    text = { Text("Verified (${verifiedPairs.size})", fontSize = 12.sp) }
+                    text = { Text("Verified by User (${verifiedPairs.size})", fontSize = 12.sp) }
                 )
             }
 
@@ -164,7 +278,7 @@ fun ManualReviewScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = when (selectedTabIndex) {
-                                0 -> "No high-confidence suggested pairs found."
+                                0 -> "No suggested pairs awaiting review."
                                 1 -> "No pairs requiring manual review."
                                 2 -> "No verified pairs yet. Approve suggestions or create manual pairs."
                                 else -> "No pairs available."
@@ -198,6 +312,13 @@ fun ManualReviewScreen(
                                     editingPerson = p
                                     editNameValue = p.originalName
                                 }
+                            },
+                            onEditAadhaarName = {
+                                val p = persons.find { it.id == pair.aadhaarPersonId }
+                                if (p != null) {
+                                    editingPerson = p
+                                    editNameValue = p.originalName
+                                }
                             }
                         )
                     }
@@ -206,7 +327,7 @@ fun ManualReviewScreen(
         }
     }
 
-    // Person Name Edit Dialog
+    // Person Name Edit Dialog (allows correcting both Land and Aadhaar names)
     editingPerson?.let { person ->
         AlertDialog(
             onDismissRequest = { editingPerson = null },
@@ -214,6 +335,10 @@ fun ManualReviewScreen(
             text = {
                 Column {
                     Text("Original: ${person.originalName} (${person.script.name})", style = MaterialTheme.typography.bodySmall)
+                    Text("Role: ${person.role}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (person.fathersOrSpouseName != null) {
+                        Text("Father / Spouse: ${person.fathersOrSpouseName}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = editNameValue,
@@ -318,137 +443,99 @@ fun ManualPairPickerModal(
 
     val selectedAadhaarPerson = aadhaarPersons.find { it.id == selectedAadhaarPersonId }
     val selectedLandPerson = landPersons.find { it.id == selectedLandPersonId }
+
     val selectedAadhaarDoc = selectedAadhaarPerson?.let { docMap[it.documentId] }
     val selectedLandDoc = selectedLandPerson?.let { docMap[it.documentId] }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Manual Document Pairing", style = MaterialTheme.typography.titleLarge)
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Cancel, contentDescription = "Close")
-                }
-            }
-        },
+        title = { Text("Create Manual Pairing") },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(440.dp)
-            ) {
-                if (aadhaarPersons.isEmpty() || landPersons.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (aadhaarPersons.isEmpty() && landPersons.isEmpty())
-                                "No Aadhaar cards or Land records available to pair. Please scan or import documents first."
-                            else if (aadhaarPersons.isEmpty())
-                                "No Aadhaar cards available for pairing."
-                            else
-                                "No Land records available for pairing.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    Text(
-                        "Select one Aadhaar card and one Land record person to establish a verified pair:",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Select an Aadhaar record and a Land Record person to manually link.", style = MaterialTheme.typography.bodySmall)
+                Spacer(modifier = Modifier.height(10.dp))
 
-                    Text("1. Aadhaar Card (${aadhaarPersons.size} available)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = Color(0xFF2563EB))
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(aadhaarPersons, key = { it.id }) { person ->
-                            val doc = docMap[person.documentId]
-                            val isSelected = person.id == selectedAadhaarPersonId
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedAadhaarPersonId = person.id }
-                                    .testTag("select_aadhaar_${person.id}"),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) Color(0xFFDBEAFE) else MaterialTheme.colorScheme.surface
-                                ),
-                                border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF2563EB)) else null
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text(person.originalName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        "${doc?.originalFilename ?: "Aadhaar"} • ${doc?.aadhaarNumberMasked ?: "ID Masked"}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                // Select Aadhaar
+                Text("1. Aadhaar Cardholder", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(6.dp)
+                ) {
+                    items(aadhaarPersons) { person ->
+                        val isSelected = person.id == selectedAadhaarPersonId
+                        val doc = docMap[person.documentId]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .clickable { selectedAadhaarPersonId = person.id }
+                                .padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    person.originalName,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    "${doc?.originalFilename ?: "Aadhaar"} • ${doc?.aadhaarNumberMasked ?: "ID: XXXX"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("2. Land Record / Khatiyan (${landPersons.size} available)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = Color(0xFF1E5E3A))
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .padding(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(landPersons, key = { it.id }) { person ->
-                            val doc = docMap[person.documentId]
-                            val isSelected = person.id == selectedLandPersonId
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedLandPersonId = person.id }
-                                    .testTag("select_land_${person.id}"),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.surface
-                                ),
-                                border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF1E5E3A)) else null
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(person.originalName, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                        Text("Pg ${doc?.pdfPageNumber ?: 1}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1E5E3A))
-                                    }
+                // Select Land Record
+                Text("2. Land Record (Khatiyan / Patta)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(6.dp)
+                ) {
+                    items(landPersons) { person ->
+                        val isSelected = person.id == selectedLandPersonId
+                        val doc = docMap[person.documentId]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .clickable { selectedLandPersonId = person.id }
+                                .padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    person.originalName,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    "Translit: ${person.transliteratedName} • ${doc?.originalFilename ?: "Land Record"} (Pg ${doc?.pdfPageNumber ?: 1})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (doc?.khataNumber != null) {
                                     Text(
-                                        "Translit: ${person.transliteratedName} • ${doc?.originalFilename ?: "Land Record"}",
+                                        "Khata: ${doc.khataNumber}, Plot: ${doc.plotNumber ?: "N/A"}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    if (doc?.khataNumber != null) {
-                                        Text(
-                                            "Khata: ${doc.khataNumber}, Plot: ${doc.plotNumber ?: "N/A"}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -489,8 +576,12 @@ fun MatchPairCard(
     landDoc: DocumentRecord?,
     onApprove: () -> Unit,
     onReject: () -> Unit,
-    onEditLandName: () -> Unit
+    onEditLandName: () -> Unit,
+    onEditAadhaarName: () -> Unit = {}
 ) {
+    val supportingEvidence = remember(pair.matchExplanation) { pair.getSupportingEvidence() }
+    val conflictingEvidence = remember(pair.matchExplanation) { pair.getConflictingEvidence() }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -501,67 +592,92 @@ fun MatchPairCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header with Confidence Badge and Person Code
+            // Header with Explicit Status Badge and Confidence
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = when {
-                        pair.status == MatchStatus.VERIFIED -> Color(0xFFD4EFDF)
-                        pair.matchConfidence >= 0.90f -> Color(0xFFD4EFDF)
-                        else -> Color(0xFFFEF3C7)
+                    color = when (pair.status) {
+                        MatchStatus.VERIFIED -> Color(0xFFD1FAE5)
+                        MatchStatus.SUGGESTED -> Color(0xFFE0F2FE)
+                        MatchStatus.NEEDS_REVIEW -> Color(0xFFFEF3C7)
+                        MatchStatus.REJECTED -> Color(0xFFFEE2E2)
                     },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = if (pair.status == MatchStatus.VERIFIED && pair.personCode != null)
-                            "${pair.personCode} • VERIFIED"
-                        else
-                            "${(pair.matchConfidence * 100).toInt()}% Confidence",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (pair.matchConfidence >= 0.90f) Color(0xFF1E5E3A) else Color(0xFF78350F),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (pair.status == MatchStatus.VERIFIED) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF047857), modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        Text(
+                            text = when (pair.status) {
+                                MatchStatus.VERIFIED -> "${pair.personCode ?: "Verified"} • VERIFIED BY USER"
+                                MatchStatus.SUGGESTED -> "SUGGESTED MATCH • ${(pair.matchConfidence * 100).toInt()}%"
+                                MatchStatus.NEEDS_REVIEW -> "NEEDS REVIEW • ${(pair.matchConfidence * 100).toInt()}%"
+                                MatchStatus.REJECTED -> "REJECTED"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (pair.status) {
+                                MatchStatus.VERIFIED -> Color(0xFF047857)
+                                MatchStatus.SUGGESTED -> Color(0xFF0369A1)
+                                MatchStatus.NEEDS_REVIEW -> Color(0xFFB45309)
+                                MatchStatus.REJECTED -> Color(0xFFB91C1C)
+                            },
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Text(
-                    text = if (pair.isManual) "Manual Override" else pair.status.name,
+                    text = if (pair.isManual) "Manual Link" else "Multi-Signal Analysis",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Two-Pane Side by Side
+            // Two-Pane Side by Side with Source References
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Aadhaar
+                // Aadhaar Document Details
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Aadhaar Card", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2563EB), fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Aadhaar Card", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2563EB), fontWeight = FontWeight.Bold)
+                            }
+                            IconButton(onClick = onEditAadhaarName, modifier = Modifier.size(20.dp)) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF2563EB), modifier = Modifier.size(13.dp))
+                            }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(pair.aadhaarName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Text(aadhaarDoc?.originalFilename ?: "Aadhaar", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(aadhaarDoc?.originalFilename ?: "Aadhaar Document", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (aadhaarDoc?.aadhaarNumberMasked != null) {
-                            Text(aadhaarDoc.aadhaarNumberMasked, style = MaterialTheme.typography.labelSmall, color = Color(0xFF2563EB))
+                            Text(aadhaarDoc.aadhaarNumberMasked, style = MaterialTheme.typography.labelSmall, color = Color(0xFF2563EB), fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
-                // Land Record
+                // Land Record Document Details (With Exact PDF Page)
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4))
@@ -578,15 +694,19 @@ fun MatchPairCard(
                                 Text("Land Record", style = MaterialTheme.typography.labelMedium, color = Color(0xFF1E5E3A), fontWeight = FontWeight.Bold)
                             }
                             IconButton(onClick = onEditLandName, modifier = Modifier.size(20.dp)) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = Color(0xFF1E5E3A), modifier = Modifier.size(14.dp))
+                                Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF1E5E3A), modifier = Modifier.size(13.dp))
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(pair.landNameOriginal, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text("Translit: ${pair.landNameTransliterated}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1E5E3A))
-                        Text("${landDoc?.originalFilename ?: "Land Record"} (Pg ${landDoc?.pdfPageNumber ?: 1})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val pageInfo = if (landDoc != null) " (Page ${landDoc.pdfPageNumber} of ${landDoc.totalPdfPages})" else ""
+                        Text("${landDoc?.originalFilename ?: "Land Record"}$pageInfo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (landDoc?.khataNumber != null) {
                             Text("Khata: ${landDoc.khataNumber}, Plot: ${landDoc.plotNumber ?: "N/A"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (landDoc?.mouza != null) {
+                            Text("Mouza: ${landDoc.mouza}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -594,15 +714,47 @@ fun MatchPairCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Explanation
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(8.dp)
+            // Multi-Signal Evidence Breakdown
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Text(pair.matchExplanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text("Signal & Evidence Evaluation", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (supportingEvidence.isNotEmpty()) {
+                        for (item in supportingEvidence) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 1.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(item, fontSize = 11.sp, color = Color(0xFF14532D))
+                            }
+                        }
+                    }
+
+                    if (conflictingEvidence.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        for (item in conflictingEvidence) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 1.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(item, fontSize = 11.sp, color = Color(0xFF78350F), fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+
+                    if (supportingEvidence.isEmpty() && conflictingEvidence.isEmpty()) {
+                        Text(pair.matchExplanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = DividerDefaults.color)
@@ -625,13 +777,13 @@ fun MatchPairCard(
                 Button(
                     onClick = onApprove,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = if (pair.status == MatchStatus.VERIFIED) Color(0xFF15803D) else MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.testTag("btn_approve_${pair.id}")
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(if (pair.status == MatchStatus.VERIFIED) "Verified" else "Approve Pair", fontSize = 12.sp)
+                    Text(if (pair.status == MatchStatus.VERIFIED) "Verified ✓" else "Approve Pair", fontSize = 12.sp)
                 }
             }
         }

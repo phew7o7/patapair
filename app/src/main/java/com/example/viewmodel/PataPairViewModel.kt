@@ -10,10 +10,13 @@ import android.os.ParcelFileDescriptor
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai.AiDocumentInterpreter
+import com.example.ai.DefaultAiDocumentInterpreter
 import com.example.db.PataDatabaseHelper
 import com.example.engine.DocumentClassifier
 import com.example.engine.MatcherEngine
 import com.example.engine.OdiaTransliterationEngine
+import com.example.model.AiAvailabilityStatus
 import com.example.model.DocStatus
 import com.example.model.DocType
 import com.example.model.DocumentRecord
@@ -41,6 +44,7 @@ import java.util.UUID
 class PataPairViewModel(application: Application) : AndroidViewModel(application) {
 
     private val dbHelper = PataDatabaseHelper.getInstance(application)
+    val aiInterpreter: AiDocumentInterpreter = DefaultAiDocumentInterpreter()
 
     private val _documents = MutableStateFlow<List<DocumentRecord>>(emptyList())
     val documents: StateFlow<List<DocumentRecord>> = _documents.asStateFlow()
@@ -63,11 +67,28 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
     private val _ocrModelStatus = MutableStateFlow(OcrModelStatus())
     val ocrModelStatus: StateFlow<OcrModelStatus> = _ocrModelStatus.asStateFlow()
 
+    private val _aiStatus = MutableStateFlow(
+        aiInterpreter.checkAvailability(application)
+    )
+    val aiStatus: StateFlow<AiAvailabilityStatus> = _aiStatus.asStateFlow()
+
+    private val _retrySummary = MutableStateFlow<String?>(null)
+    val retrySummary: StateFlow<String?> = _retrySummary.asStateFlow()
+
+    private val _matchingDiagnostics = MutableStateFlow(com.example.model.MatchingDiagnostics())
+    val matchingDiagnostics: StateFlow<com.example.model.MatchingDiagnostics> = _matchingDiagnostics.asStateFlow()
+
     private var processingJob: Job? = null
 
     init {
         refreshModelStatus()
+        refreshAiStatus()
         loadDataFromDatabase()
+    }
+
+    fun refreshAiStatus() {
+        val context = getApplication<Application>()
+        _aiStatus.value = aiInterpreter.checkAvailability(context)
     }
 
     fun refreshModelStatus() {
@@ -84,7 +105,52 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
             _documents.value = docs
             _persons.value = ppl
             _matchPairs.value = pairs
+
+            computeDiagnostics(docs, ppl, pairs)
+
+            // Auto-trigger matching engine if candidate documents exist but pairs have not yet been generated
+            if (pairs.isEmpty() && docs.isNotEmpty()) {
+                val hasAadhaar = docs.any { it.docType == DocType.AADHAAR }
+                val hasLand = docs.any { it.docType == DocType.LAND_RECORD }
+                if (hasAadhaar && hasLand) {
+                    generateMatchSuggestions()
+                }
+            }
         }
+    }
+
+    private fun computeDiagnostics(
+        docs: List<DocumentRecord>,
+        ppl: List<PersonRecord>,
+        pairs: List<MatchPairRecord>
+    ) {
+        val personDocIds = ppl.map { it.documentId }.toSet()
+        val aadhaarDocs = docs.filter { !it.isDuplicate && it.docType == DocType.AADHAAR }
+        val landDocs = docs.filter { !it.isDuplicate && it.docType == DocType.LAND_RECORD }
+
+        val eligibleAadhaar = aadhaarDocs.count { personDocIds.contains(it.id) }
+        val missingAadhaar = aadhaarDocs.size - eligibleAadhaar
+        val eligibleLand = landDocs.count { personDocIds.contains(it.id) }
+        val missingLand = landDocs.size - eligibleLand
+
+        val suggested = pairs.count { it.status == MatchStatus.SUGGESTED }
+        val needsReview = pairs.count { it.status == MatchStatus.NEEDS_REVIEW }
+        val verified = pairs.count { it.status == MatchStatus.VERIFIED }
+
+        val evaluated = eligibleAadhaar * eligibleLand
+        val rejected = (evaluated - (suggested + needsReview + verified)).coerceAtLeast(0)
+
+        _matchingDiagnostics.value = com.example.model.MatchingDiagnostics(
+            eligibleAadhaarCount = eligibleAadhaar,
+            eligibleLandCount = eligibleLand,
+            missingNameAadhaarCount = missingAadhaar,
+            missingNameLandCount = missingLand,
+            totalCandidatesEvaluated = evaluated,
+            candidatesRejectedByFilters = rejected,
+            candidatesSuggested = suggested,
+            candidatesNeedsReview = needsReview,
+            candidatesVerified = verified
+        )
     }
 
     // --- Import Pipelines ---
@@ -285,15 +351,25 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
                 val total = pendingDocs.size
                 if (total == 0) return@launch
 
+                var successes = 0
+                var failures = 0
+
                 for ((index, doc) in pendingDocs.withIndex()) {
                     _processingProgress.value = (index.toFloat() / total)
                     _processingMessage.value = "Processing (${index + 1}/$total): ${doc.originalFilename} (Pg ${doc.pdfPageNumber})"
 
-                    processSingleDocument(doc)
+                    val resultDoc = processSingleDocument(doc)
+                    if (resultDoc.docType != DocType.FAILED_OCR && resultDoc.docStatus != DocStatus.FAILED) {
+                        successes++
+                    } else {
+                        failures++
+                    }
                 }
 
                 _processingProgress.value = 1.0f
-                _processingMessage.value = "Processing complete."
+                val summary = "Processing complete: $successes succeeded, $failures failed out of $total documents."
+                _processingMessage.value = summary
+                _retrySummary.value = summary
 
                 // Generate automatic suggestions after processing batch
                 generateMatchSuggestions()
@@ -316,37 +392,100 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
         _processingMessage.value = "Paused"
     }
 
-    fun retryFailedDocuments() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val failedDocs = dbHelper.getAllDocuments().filter {
-                it.docType == DocType.FAILED_OCR || it.docStatus == DocStatus.FAILED
+    /**
+     * Reprocesses ONLY failed documents, preserving all successful classifications and verified pairs,
+     * avoiding duplicate person records, and reporting exact success/failure numbers upon completion.
+     */
+    fun retryFailedDocuments(onComplete: ((successCount: Int, failureCount: Int) -> Unit)? = null) {
+        if (_isProcessing.value) return
+
+        processingJob = viewModelScope.launch(Dispatchers.IO) {
+            _isProcessing.value = true
+            try {
+                val failedDocs = dbHelper.getAllDocuments().filter {
+                    !it.isDuplicate && (it.docType == DocType.FAILED_OCR || it.docStatus == DocStatus.FAILED)
+                }
+
+                val total = failedDocs.size
+                if (total == 0) {
+                    _processingMessage.value = "No failed documents to retry."
+                    withContext(Dispatchers.Main) {
+                        onComplete?.invoke(0, 0)
+                    }
+                    return@launch
+                }
+
+                // Reset only these failed documents to PENDING
+                val updatedDocs = failedDocs.map {
+                    it.copy(docStatus = DocStatus.PENDING, processingErrors = null)
+                }
+                dbHelper.upsertDocuments(updatedDocs)
+                loadDataFromDatabase()
+
+                var successes = 0
+                var failures = 0
+
+                for ((index, doc) in updatedDocs.withIndex()) {
+                    _processingProgress.value = (index.toFloat() / total)
+                    _processingMessage.value = "Retrying (${index + 1}/$total): ${doc.originalFilename} (Pg ${doc.pdfPageNumber})"
+
+                    val resultDoc = processSingleDocument(doc)
+                    if (resultDoc.docType != DocType.FAILED_OCR && resultDoc.docStatus != DocStatus.FAILED) {
+                        successes++
+                    } else {
+                        failures++
+                    }
+                }
+
+                _processingProgress.value = 1.0f
+                val summary = "Retry complete: $successes succeeded, $failures failed out of $total documents."
+                _processingMessage.value = summary
+                _retrySummary.value = summary
+
+                generateMatchSuggestions()
+
+                withContext(Dispatchers.Main) {
+                    onComplete?.invoke(successes, failures)
+                }
+            } catch (e: CancellationException) {
+                _processingMessage.value = "Retry paused/cancelled."
+                throw e
+            } catch (e: Exception) {
+                _processingMessage.value = "Error during retry: ${e.localizedMessage}"
+            } finally {
+                _isProcessing.value = false
+                loadDataFromDatabase()
             }
-            val updated = failedDocs.map {
-                it.copy(docStatus = DocStatus.PENDING, processingErrors = null)
-            }
-            dbHelper.upsertDocuments(updated)
-            loadDataFromDatabase()
-            startProcessingQueue()
         }
     }
 
-    private suspend fun processSingleDocument(doc: DocumentRecord) {
-        val context = getApplication<Application>()
-        val uri = Uri.parse(doc.uri)
+    fun clearRetrySummary() {
+        _retrySummary.value = null
+    }
 
-        // Run OCR Engine (runs ML Kit first; checks Tesseract for Odia)
-        val ocrResult = DocumentOcrEngine.processImageUri(
+    private suspend fun processSingleDocument(doc: DocumentRecord): DocumentRecord {
+        val context = getApplication<Application>()
+
+        // Run OCR Engine (renders PDF pages via PdfPageRenderer; never passes PDF URI to BitmapFactory)
+        val ocrResult = DocumentOcrEngine.processDocument(
             context = context,
-            imageUri = uri,
-            userRotationDegrees = doc.userRotation
+            doc = doc
         )
 
         val rawText = ocrResult.fullText
         val redactedText = DocumentOcrEngine.redactSensitiveIdentifiers(rawText)
 
-        // Run Classifier
+        // Run AI Interpretation on OCR text to rectify known OCR tokens (e.g. AADNAAR -> Aadhaar header)
+        val aiInterpretation = aiInterpreter.interpretDocument(
+            rawText = rawText,
+            docType = doc.docType,
+            script = OdiaTransliterationEngine.detectScript(rawText)
+        )
+        val cleanedText = aiInterpretation.correctedOcrText ?: rawText
+
+        // Run Classifier on cleaned text
         val classifierResult = DocumentClassifier.classifyDocument(
-            text = rawText,
+            text = cleanedText,
             ocrError = ocrResult.error,
             hasTableGridVisuals = false,
             isWaitingForModel = ocrResult.isWaitingForModel
@@ -373,6 +512,8 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
             ocrLanguages = ocrResult.languageUsed,
             rawExtractedText = rawText,
             redactedText = redactedText,
+            imageWidth = if (ocrResult.renderedWidth > 0) ocrResult.renderedWidth else doc.imageWidth,
+            imageHeight = if (ocrResult.renderedHeight > 0) ocrResult.renderedHeight else doc.imageHeight,
             classificationScore = classifierResult.confidence,
             classificationReason = if (ocrResult.isWaitingForModel) "Waiting for OCR model" else classifierResult.reason,
             rulesFiredJson = rulesJson,
@@ -385,28 +526,44 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
         )
         dbHelper.upsertDocument(updatedDoc)
 
+        // Prevent duplicate person entries on reprocess/retry:
+        val existingPersons = dbHelper.getPersonsByDocumentId(updatedDoc.id)
+        val hasManualCorrections = existingPersons.any { it.isManuallyCorrected }
+        if (!hasManualCorrections) {
+            dbHelper.deletePersonsByDocumentId(updatedDoc.id)
+        }
+
         // Store extracted person records only if not waiting for model
         if (!ocrResult.isWaitingForModel && classifierResult.extractedPersons.isNotEmpty()) {
-            val personsList = classifierResult.extractedPersons.map { (name, script) ->
+            val detailsMap = classifierResult.extractedPersonDetails.associateBy { it.name }
+
+            val personsList = classifierResult.extractedPersons.mapIndexed { index, (name, script) ->
+                val draft = detailsMap[name]
                 val transliterated = if (script == ScriptType.ODIA) {
                     OdiaTransliterationEngine.transliterateOdiaToEnglish(name)
                 } else name
 
                 val normalized = OdiaTransliterationEngine.normalizeForMatching(name)
 
+                // Deterministic slot ID to prevent orphaned duplicate records
+                val personId = "${updatedDoc.id}_p_$index"
+
                 PersonRecord(
-                    id = UUID.randomUUID().toString(),
+                    id = personId,
                     documentId = updatedDoc.id,
                     originalName = name,
                     script = script,
                     transliteratedName = transliterated,
                     normalizedName = normalized,
                     confidence = 0.85f,
-                    role = if (updatedDoc.docType == DocType.LAND_RECORD) "Rayat / Pattadar" else "Aadhaar Cardholder"
+                    role = draft?.role ?: (if (updatedDoc.docType == DocType.LAND_RECORD) "Rayat / Pattadar" else "Aadhaar Cardholder"),
+                    fathersOrSpouseName = draft?.fatherOrSpouseName ?: aiInterpretation.fatherOrSpouseName
                 )
             }
             dbHelper.upsertPersons(personsList)
         }
+
+        return updatedDoc
     }
 
     // --- Synthetic Collection (Debug / Verification) ---
@@ -579,11 +736,37 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
 
             // Only generate match suggestions when candidates exist on BOTH sides
             if (aadhaarPersons.isEmpty() || landPersons.isEmpty()) {
+                val pairs = dbHelper.getAllMatchPairs()
+                computeDiagnostics(allDocs, dbHelper.getAllPersons(), pairs)
                 return@launch
             }
 
             val existingPairs = dbHelper.getAllMatchPairs()
             val existingPairKeys = existingPairs.map { "${it.aadhaarPersonId}:${it.landPersonId}" }.toSet()
+
+            // Pre-scan to detect multi-candidate conflicts
+            val candidateCountPerAadhaar = mutableMapOf<String, Int>()
+            val candidateCountPerLand = mutableMapOf<String, Int>()
+
+            for (aPerson in aadhaarPersons) {
+                for (lPerson in landPersons) {
+                    val key = "${aPerson.id}:${lPerson.id}"
+                    if (existingPairKeys.contains(key)) continue
+
+                    val testEval = MatcherEngine.evaluateCandidate(
+                        aadhaarPerson = aPerson,
+                        landPerson = lPerson,
+                        aadhaarDoc = docMap[aPerson.documentId],
+                        landDoc = docMap[lPerson.documentId],
+                        hasMultipleCandidates = false
+                    )
+
+                    if (testEval.score >= 0.60f) {
+                        candidateCountPerAadhaar[aPerson.id] = (candidateCountPerAadhaar[aPerson.id] ?: 0) + 1
+                        candidateCountPerLand[lPerson.id] = (candidateCountPerLand[lPerson.id] ?: 0) + 1
+                    }
+                }
+            }
 
             val newPairs = mutableListOf<MatchPairRecord>()
 
@@ -592,13 +775,24 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
                     val key = "${aPerson.id}:${lPerson.id}"
                     if (existingPairKeys.contains(key)) continue
 
-                    val matchResult = MatcherEngine.compareNames(
-                        aadhaarName = aPerson.normalizedName,
-                        landRecordName = lPerson.normalizedName
+                    val hasMultiple = (candidateCountPerAadhaar[aPerson.id] ?: 0) > 1 ||
+                                      (candidateCountPerLand[lPerson.id] ?: 0) > 1
+
+                    val matchResult = MatcherEngine.evaluateCandidate(
+                        aadhaarPerson = aPerson,
+                        landPerson = lPerson,
+                        aadhaarDoc = docMap[aPerson.documentId],
+                        landDoc = docMap[lPerson.documentId],
+                        hasMultipleCandidates = hasMultiple
                     )
 
-                    if (matchResult.score >= MatcherEngine.SUGGEST_THRESHOLD) {
-                        val status = if (matchResult.isAutoApprovable) MatchStatus.SUGGESTED else MatchStatus.NEEDS_REVIEW
+                    if (matchResult.score >= 0.60f) {
+                        val status = if (matchResult.score >= 0.85f && matchResult.conflictingEvidence.isEmpty() && !hasMultiple) {
+                            MatchStatus.SUGGESTED
+                        } else {
+                            MatchStatus.NEEDS_REVIEW
+                        }
+
                         newPairs.add(
                             MatchPairRecord(
                                 id = UUID.randomUUID().toString(),
@@ -623,6 +817,80 @@ class PataPairViewModel(application: Application) : AndroidViewModel(application
                 dbHelper.upsertMatchPairs(newPairs)
             }
             loadDataFromDatabase()
+        }
+    }
+
+    /**
+     * Re-parses existing documents in the database that have rawExtractedText but 0 extracted people,
+     * or are missing Khata/Plot numbers, using updated Odia numeral converters and Khatiyan parser.
+     */
+    fun reprocessUnextractedDocuments(onComplete: ((reprocessedCount: Int, newPersonCount: Int) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allDocs = dbHelper.getAllDocuments().filter { !it.isDuplicate }
+            var reprocessedCount = 0
+            var newPersonCount = 0
+
+            for (doc in allDocs) {
+                if (doc.rawExtractedText.isBlank()) continue
+                val existingPersons = dbHelper.getPersonsByDocumentId(doc.id)
+                if (existingPersons.any { it.isManuallyCorrected }) continue
+
+                val isMissingPersons = existingPersons.isEmpty()
+                val isMissingLandId = doc.docType == DocType.LAND_RECORD && (doc.khataNumber == null || doc.plotNumber == null)
+
+                if (isMissingPersons || isMissingLandId) {
+                    val classifierResult = DocumentClassifier.classifyDocument(
+                        text = doc.rawExtractedText,
+                        ocrError = doc.processingErrors,
+                        hasTableGridVisuals = false
+                    )
+
+                    val updatedDoc = doc.copy(
+                        docType = if (doc.isManuallyCorrected) doc.docType else classifierResult.docType,
+                        classificationScore = classifierResult.confidence,
+                        khataNumber = classifierResult.khataNumber ?: doc.khataNumber,
+                        plotNumber = classifierResult.plotNumber ?: doc.plotNumber,
+                        tahasil = classifierResult.tahasil ?: doc.tahasil,
+                        mouza = classifierResult.mouza ?: doc.mouza,
+                        aadhaarNumberMasked = classifierResult.aadhaarMasked ?: doc.aadhaarNumberMasked
+                    )
+                    dbHelper.upsertDocument(updatedDoc)
+
+                    if (classifierResult.extractedPersons.isNotEmpty()) {
+                        dbHelper.deletePersonsByDocumentId(doc.id)
+                        val detailsMap = classifierResult.extractedPersonDetails.associateBy { it.name }
+                        val personsList = classifierResult.extractedPersons.mapIndexed { index, (name, script) ->
+                            val draft = detailsMap[name]
+                            val transliterated = if (script == ScriptType.ODIA) {
+                                OdiaTransliterationEngine.transliterateOdiaToEnglish(name)
+                            } else name
+                            val normalized = OdiaTransliterationEngine.normalizeForMatching(name)
+
+                            PersonRecord(
+                                id = "${updatedDoc.id}_p_$index",
+                                documentId = updatedDoc.id,
+                                originalName = name,
+                                script = script,
+                                transliteratedName = transliterated,
+                                normalizedName = normalized,
+                                confidence = 0.85f,
+                                role = draft?.role ?: (if (updatedDoc.docType == DocType.LAND_RECORD) "Rayat / Pattadar" else "Aadhaar Cardholder"),
+                                fathersOrSpouseName = draft?.fatherOrSpouseName
+                            )
+                        }
+                        dbHelper.upsertPersons(personsList)
+                        newPersonCount += personsList.size
+                    }
+                    reprocessedCount++
+                }
+            }
+
+            generateMatchSuggestions()
+            loadDataFromDatabase()
+
+            withContext(Dispatchers.Main) {
+                onComplete?.invoke(reprocessedCount, newPersonCount)
+            }
         }
     }
 

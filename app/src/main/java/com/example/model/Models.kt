@@ -105,17 +105,28 @@ data class OcrResult(
     val confidence: Float,
     val error: String? = null,
     val isSuccessful: Boolean = error == null,
-    val isWaitingForModel: Boolean = false
+    val isWaitingForModel: Boolean = false,
+    val renderedWidth: Int = 0,
+    val renderedHeight: Int = 0
 )
 
 data class OcrModelStatus(
     val isOdiaInstalled: Boolean = false,
     val odiaSizeMb: Float = 0f,
     val isEnglishInstalled: Boolean = false,
-    val englishSizeMb: Float = 0f
+    val englishSizeMb: Float = 0f,
+    val isOdiaVerified: Boolean = false,
+    val odiaVerificationMessage: String = "",
+    val odiaSampleOutput: String = ""
 ) {
     val isReadyForOdia: Boolean get() = isOdiaInstalled
 }
+
+data class OdiaModelVerificationResult(
+    val isVerified: Boolean,
+    val sampleOcrText: String = "",
+    val message: String = ""
+)
 
 data class ImportModelResult(
     val isSuccess: Boolean,
@@ -128,6 +139,14 @@ data class ClassificationRuleResult(
     val description: String
 )
 
+data class ExtractedPersonDraft(
+    val name: String,
+    val script: ScriptType,
+    val fatherOrSpouseName: String? = null,
+    val role: String = "Rayat / Pattadar",
+    val shareDetails: String? = null
+)
+
 data class DocumentClassifierResult(
     val docType: DocType,
     val confidence: Float,
@@ -138,5 +157,6 @@ data class DocumentClassifierResult(
     val plotNumber: String? = null,
     val tahasil: String? = null,
     val mouza: String? = null,
-    val aadhaarMasked: String? = null
+    val aadhaarMasked: String? = null,
+    val extractedPersonDetails: List<ExtractedPersonDraft> = emptyList()
 )
