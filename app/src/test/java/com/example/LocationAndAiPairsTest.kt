@@ -112,4 +112,34 @@ class LocationAndAiPairsTest {
         assertTrue("Must have location match signal", match.signals.any { it.signalName == "LOCATION_MATCH" })
         assertTrue("Must have supporting evidence for location", match.supportingEvidence.any { it.contains("corroborated", ignoreCase = true) })
     }
+
+    @Test
+    fun testAllDiverseLocationsExtractionAndGrouping() {
+        val docPuri = DocumentRecord("dP", "u1", "pata_puri.pdf", 1, 1, DocType.LAND_RECORD, DocStatus.DETECTED, "tess", "ori", "ଓଡ଼ିଶା ସରକାର\nତହସିଲ: ପୁରୀ\nମୌଜା: ବଳଗଣ୍ଡି", "", tahasil = "ପୁରୀ")
+        val docNuapada = DocumentRecord("dN", "u2", "aadhaar_nuapada.jpg", 1, 1, DocType.AADHAAR, DocStatus.DETECTED, "tess", "eng", "Address: At: Khariar, Dist: Nuapada - 766107", "")
+        val docBalasore = DocumentRecord("dB", "u3", "pata_balasore.pdf", 1, 1, DocType.LAND_RECORD, DocStatus.DETECTED, "tess", "ori", "ଜିଲ୍ଲା: ବାଲେଶ୍ୱର", "", district = "ବାଲେଶ୍ୱର")
+        val docBargarh = DocumentRecord("dBar", "u4", "aadhaar_bargarh.jpg", 1, 1, DocType.AADHAAR, DocStatus.DETECTED, "tess", "eng", "Address: Bargarh, Odisha", "")
+
+        val locP = LocationExtractor.extractCanonicalLocation(docPuri)
+        val locN = LocationExtractor.extractCanonicalLocation(docNuapada)
+        val locB = LocationExtractor.extractCanonicalLocation(docBalasore)
+        val locBar = LocationExtractor.extractCanonicalLocation(docBargarh)
+
+        assertEquals("Puri", locP)
+        assertEquals("Khariar", locN) // Town Khariar prioritized over district Nuapada
+        assertEquals("Balasore", locB)
+        assertEquals("Bargarh", locBar)
+
+        val groups = LocationExtractor.groupDocumentsAndPairs(
+            documents = listOf(docPuri, docNuapada, docBalasore, docBargarh),
+            matchPairs = emptyList()
+        )
+
+        // All locations must be present
+        val locationKeys = groups.map { it.locationKey }.toSet()
+        assertTrue("Must contain Puri", locationKeys.contains("Puri"))
+        assertTrue("Must contain Khariar", locationKeys.contains("Khariar"))
+        assertTrue("Must contain Balasore", locationKeys.contains("Balasore"))
+        assertTrue("Must contain Bargarh", locationKeys.contains("Bargarh"))
+    }
 }

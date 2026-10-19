@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -48,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.db.PataDatabaseHelper
+import com.example.engine.LocationExtractor
 import com.example.export.ExportManager
 import com.example.export.ExportResult
 import com.example.model.MatchStatus
@@ -63,6 +67,7 @@ fun ExportScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val matchPairs by viewModel.matchPairs.collectAsState()
+    val documents by viewModel.documents.collectAsState()
 
     val verifiedCount = matchPairs.count { it.status == MatchStatus.VERIFIED }
     val totalPairs = matchPairs.size
@@ -95,6 +100,7 @@ fun ExportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -103,6 +109,50 @@ fun ExportScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            // Location-Sorted Compiled PDF Option
+            Card(
+                modifier = Modifier.fillMaxWidth().testTag("card_export_location_pdf"),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC77700).copy(alpha = 0.5f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Place, contentDescription = null, tint = Color(0xFFC77700), modifier = Modifier.size(28.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Location-Wise PDF Dossier (Compiled Images)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                            Text("Compile all location-sorted document images, Patta records, and Aadhaar cards into a unified multi-page PDF", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            isExporting = true
+                            coroutineScope.launch {
+                                val groups = LocationExtractor.groupDocumentsAndPairs(documents, matchPairs)
+                                val res = ExportManager.exportAllLocationsPdf(
+                                    context = context,
+                                    locationGroups = groups,
+                                    dbHelper = PataDatabaseHelper.getInstance(context)
+                                )
+                                exportResult = res
+                                isExporting = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("btn_export_location_pdf"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC77700)),
+                        enabled = !isExporting
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export Location Images to PDF")
+                    }
+                }
+            }
 
             // Option 1: PDF Dossier
             Card(

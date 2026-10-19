@@ -432,7 +432,7 @@ fun AiPairsSummaryBanner(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Place, contentDescription = null, tint = Color(0xFFFF8A65), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("View sorted by Location (Kesinga, Bhawanipatna...)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text("View sorted by Location", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
                     Text("Explore →", color = Color(0xFFFFD54F), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
@@ -786,7 +786,7 @@ fun AiPairsEmptyState(
 
             Text("No AI Matched Pairs Found Yet", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text(
-                "The AI scanner matches Odia Land Records (Patta) with English Aadhaar cards by analyzing person names, kinship relations, and common Odisha locations (Kesinga, Bhawanipatna, etc.).",
+                "The AI scanner matches Odia Land Records (Patta) with English Aadhaar cards by analyzing person names, kinship relations, and extracted Odisha locations.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
@@ -814,7 +814,7 @@ fun AiPairsEmptyState(
                     onClick = onSeedData,
                     modifier = Modifier.testTag("btn_empty_seed_test_data")
                 ) {
-                    Text("Seed Test Records (Kesinga & Bhawanipatna)")
+                    Text("Seed Verification Test Records")
                 }
             }
         }

@@ -52,7 +52,30 @@ object LocationExtractor {
         LocationInfo("Bargarh", "ବରଗଡ଼", "Bargarh (ବରଗଡ଼)"),
         LocationInfo("Nuapada", "ନୂଆପଡ଼ା", "Nuapada (ନୂଆପଡ଼ା)"),
         LocationInfo("Khariar", "ଖଡ଼ିଆଳ", "Khariar (ଖଡ଼ିଆଳ)"),
-        LocationInfo("Rayagada", "ରାୟଗଡ଼", "Rayagada (ରାୟଗଡ଼)")
+        LocationInfo("Rayagada", "ରାୟଗଡ଼", "Rayagada (ରାୟଗଡ଼)"),
+        LocationInfo("Puri", "ପୁରୀ", "Puri (ପୁରୀ)"),
+        LocationInfo("Balasore", "ବାଲେଶ୍ୱର", "Balasore (ବାଲେଶ୍ୱର)"),
+        LocationInfo("Bhadrak", "ଭଦ୍ରକ", "Bhadrak (ଭଦ୍ରକ)"),
+        LocationInfo("Jajpur", "ଯାଜପୁର", "Jajpur (ଯାଜପୁର)"),
+        LocationInfo("Kendrapara", "କେନ୍ଦ୍ରାପଡ଼ା", "Kendrapara (କେନ୍ଦ୍ରାପଡ଼ା)"),
+        LocationInfo("Jagatsinghpur", "ଜଗତସିଂହପୁର", "Jagatsinghpur (ଜଗତସିଂହପୁର)"),
+        LocationInfo("Angul", "ଅନୁଗୋଳ", "Angul (ଅନୁଗୋଳ)"),
+        LocationInfo("Dhenkanal", "ଢେଙ୍କାନାଳ", "Dhenkanal (ଢେଙ୍କାନାଳ)"),
+        LocationInfo("Keonjhar", "କେନ୍ଦୁଝର", "Keonjhar (କେନ୍ଦୁଝର)"),
+        LocationInfo("Baripada", "ବାରିପଦା", "Baripada (ବାରିପଦା)"),
+        LocationInfo("Rourkela", "ରାଉରକେଲା", "Rourkela (ରାଉରକେଲା)"),
+        LocationInfo("Sundargarh", "ସୁନ୍ଦରଗଡ଼", "Sundargarh (ସୁନ୍ଦରଗଡ଼)"),
+        LocationInfo("Jharsuguda", "ଝାରସୁଗୁଡ଼ା", "Jharsuguda (ଝାରସୁଗୁଡ଼ା)"),
+        LocationInfo("Deogarh", "ଦେବଗଡ଼", "Deogarh (ଦେବଗଡ଼)"),
+        LocationInfo("Sonepur", "ସୁବର୍ଣ୍ଣପୁର", "Sonepur (ସୁବର୍ଣ୍ଣପୁର)"),
+        LocationInfo("Boudh", "ବୌଦ୍ଧ", "Boudh (ବୌଦ୍ଧ)"),
+        LocationInfo("Phulbani", "ଫୁଲବାଣୀ", "Phulbani (ଫୁଲବାଣୀ)"),
+        LocationInfo("Koraput", "କୋରାପୁଟ", "Koraput (କୋରାପୁଟ)"),
+        LocationInfo("Jeypore", "ଜୟପୁର", "Jeypore (ଜୟପୁର)"),
+        LocationInfo("Nabarangpur", "ନବରଙ୍ଗପୁର", "Nabarangpur (ନବରଙ୍ଗପୁର)"),
+        LocationInfo("Malkangiri", "ମାଲକାନଗିରି", "Malkangiri (ମାଲକାନଗିରି)"),
+        LocationInfo("Berhampur", "ବ୍ରହ୍ମପୁର", "Berhampur (ବ୍ରହ୍ମପୁର)"),
+        LocationInfo("Paralakhemundi", "ପାରଳାଖେମୁଣ୍ଡି", "Paralakhemundi (ପାରଳାଖେମୁଣ୍ଡି)")
     )
 
     private val LOCATION_ALIASES = mapOf(
@@ -116,7 +139,62 @@ object LocationExtractor {
         "khariar" to "Khariar",
         "ଖଡ଼ିଆଳ" to "Khariar",
         "rayagada" to "Rayagada",
-        "ରାୟଗଡ଼" to "Rayagada"
+        "ରାୟଗଡ଼" to "Rayagada",
+        "puri" to "Puri",
+        "ପୁରୀ" to "Puri",
+        "balasore" to "Balasore",
+        "baleshwar" to "Balasore",
+        "ବାଲେଶ୍ୱର" to "Balasore",
+        "bhadrak" to "Bhadrak",
+        "ଭଦ୍ରକ" to "Bhadrak",
+        "jajpur" to "Jajpur",
+        "ଯାଜପୁର" to "Jajpur",
+        "kendrapara" to "Kendrapara",
+        "kendrapada" to "Kendrapara",
+        "କେନ୍ଦ୍ରାପଡ଼ା" to "Kendrapara",
+        "jagatsinghpur" to "Jagatsinghpur",
+        "ଜଗତସିଂହପୁର" to "Jagatsinghpur",
+        "angul" to "Angul",
+        "ଅନୁଗୋଳ" to "Angul",
+        "dhenkanal" to "Dhenkanal",
+        "ଢେଙ୍କାନାଳ" to "Dhenkanal",
+        "keonjhar" to "Keonjhar",
+        "kendujhar" to "Keonjhar",
+        "କେନ୍ଦୁଝର" to "Keonjhar",
+        "baripada" to "Baripada",
+        "mayurbhanj" to "Baripada",
+        "ବାରିପଦା" to "Baripada",
+        "rourkela" to "Rourkela",
+        "ରାଉରକେଲା" to "Rourkela",
+        "sundargarh" to "Sundargarh",
+        "ସୁନ୍ଦରଗଡ଼" to "Sundargarh",
+        "jharsuguda" to "Jharsuguda",
+        "ଝାରସୁଗୁଡ଼ା" to "Jharsuguda",
+        "deogarh" to "Deogarh",
+        "ଦେବଗଡ଼" to "Deogarh",
+        "sonepur" to "Sonepur",
+        "subarnapur" to "Sonepur",
+        "ସୁବର୍ଣ୍ଣପୁର" to "Sonepur",
+        "boudh" to "Boudh",
+        "ବୌଦ୍ଧ" to "Boudh",
+        "phulbani" to "Phulbani",
+        "kandhamal" to "Phulbani",
+        "ଫୁଲବାଣୀ" to "Phulbani",
+        "koraput" to "Koraput",
+        "କୋରାପୁଟ" to "Koraput",
+        "jeypore" to "Jeypore",
+        "ଜୟପୁର" to "Jeypore",
+        "nabarangpur" to "Nabarangpur",
+        "ନବରଙ୍ଗପୁର" to "Nabarangpur",
+        "malkangiri" to "Malkangiri",
+        "ମାଲକାନଗିରି" to "Malkangiri",
+        "berhampur" to "Berhampur",
+        "brahmapur" to "Berhampur",
+        "ganjam" to "Berhampur",
+        "ବ୍ରହ୍ମପୁର" to "Berhampur",
+        "paralakhemundi" to "Paralakhemundi",
+        "gajapati" to "Paralakhemundi",
+        "ପାରଳାଖେମୁଣ୍ଡି" to "Paralakhemundi"
     )
 
     /**
@@ -156,38 +234,57 @@ object LocationExtractor {
         return "Unassigned / General"
     }
 
+    private val DISTRICT_KEYS = setOf(
+        "kalahandi", "କଳାହାଣ୍ଡି",
+        "khordha", "khurda", "ଖୋର୍ଦ୍ଧା",
+        "cuttack", "କଟକ",
+        "sambalpur", "ସମ୍ବଲପୁର",
+        "bargarh", "ବରଗଡ଼",
+        "bolangir", "balangir", "ବଲାଙ୍ଗୀର",
+        "subarnapur", "sonepur", "ସୁବର୍ଣ୍ଣପୁର", "ସୋନପୁର",
+        "boudh", "ବୌଦ୍ଧ",
+        "kandhamal", "phulbani", "କନ୍ଧମାଳ", "ଫୁଲବାଣୀ",
+        "koraput", "କୋରାପୁଟ",
+        "nabarangpur", "ନବରଙ୍ଗପୁର",
+        "malkangiri", "ମାଲକାନଗିରି",
+        "rayagada", "ରାୟଗଡ଼",
+        "ganjam", "ଗଞ୍ଜାମ",
+        "gajapati", "ଗଜପତି",
+        "puri", "ପୁରୀ",
+        "balasore", "baleshwar", "ବାଲେଶ୍ୱର",
+        "bhadrak", "ଭଦ୍ରକ",
+        "jajpur", "ଯାଜପୁର",
+        "kendrapara", "କେନ୍ଦ୍ରାପଡ଼ା",
+        "jagatsinghpur", "ଜଗତସିଂହପୁର",
+        "angul", "ଅନୁଗୋଳ",
+        "dhenkanal", "ଢେଙ୍କାନାଳ",
+        "keonjhar", "କେନ୍ଦୁଝର",
+        "mayurbhanj", "ମୟୂରଭଞ୍ଜ",
+        "sundargarh", "ସୁନ୍ଦରଗଡ଼",
+        "jharsuguda", "ଝାରସୁଗୁଡ଼ା",
+        "deogarh", "ଦେବଗଡ଼",
+        "nuapada", "ନୂଆପଡ଼ା"
+    )
+
     /**
      * Finds any known Odisha location mentioned in raw text.
+     * Prioritizes specific towns, villages, and tahasils first before broader district names.
      */
     fun findLocationInText(text: String): String? {
         val lower = text.lowercase(Locale.ROOT)
-        // Check specific towns first before broad district names
-        val priorityKeys = listOf(
-            "kesinga", "କେସିଙ୍ଗା", "keshinga",
-            "bhawanipatna", "ଭବାନୀପାଟଣା", "ଭବାନିପାଟଣା", "bhawanipatana",
-            "dharamgarh", "ଧର୍ମଗଡ଼", "dharmagarh",
-            "junagarh", "ଜୁନାଗଡ଼",
-            "karlamunda", "କର୍ଲାମୁଣ୍ଡା",
-            "narla", "ନର୍ଲା",
-            "lanjigarh", "ଲାଞ୍ଜିଗଡ଼",
-            "m rampur", "ରାମପୁର",
-            "jaipatna", "ଜୟପାଟଣା",
-            "koksara", "କୋକସରା",
-            "golamunda", "ଗୋଲାମୁଣ୍ଡା",
-            "kalampur", "କଲମପୁର",
-            "kudiary", "କୁଦିଆରୀ",
-            "jatni", "ଜଟଣୀ",
-            "kalahandi", "କଳାହାଣ୍ଡି",
-            "khordha", "ଖୋର୍ଦ୍ଧା",
-            "titilagarh", "ଟିଟିଲାଗଡ଼",
-            "bolangir", "balangir", "ବଲାଙ୍ଗୀର",
-            "bargarh", "ବରଗଡ଼",
-            "sambalpur", "ସମ୍ବଲପୁର",
-            "bhubaneswar", "ଭୁବନେଶ୍ୱର",
-            "cuttack", "କଟକ"
-        )
+        // 1. Check specific localities first
+        val townKeys = LOCATION_ALIASES.keys
+            .filter { it !in DISTRICT_KEYS }
+            .sortedByDescending { it.length }
+        for (key in townKeys) {
+            if (lower.contains(key) || text.contains(key)) {
+                return LOCATION_ALIASES[key]
+            }
+        }
 
-        for (key in priorityKeys) {
+        // 2. Fall back to broader district names if no specific locality found
+        val districtKeys = DISTRICT_KEYS.sortedByDescending { it.length }
+        for (key in districtKeys) {
             if (lower.contains(key) || text.contains(key)) {
                 return LOCATION_ALIASES[key]
             }
@@ -213,10 +310,10 @@ object LocationExtractor {
     }
 
     /**
-     * Extracts village or tahasil using regex.
+     * Extracts village, mouza, tahasil, or district using regex.
      */
     private fun extractVillageOrTahasilRegex(text: String): String? {
-        val regex = "(?:(?:village|vill|mouza|tahasil|tehsil|ମୌଜା|ତହସିଲ|ଗ୍ରାମ|ଜିଲ୍ଲା|ଠିକଣା)[:\\s\\-]+|(?:at[/\\-\\s]+po[:\\s\\-]+)|(?:at[:\\-\\s]+))([A-Za-z\\u0B00-\\u0B7F]+)".toRegex(RegexOption.IGNORE_CASE)
+        val regex = "(?:(?:village|vill|mouza|tahasil|tehsil|district|dist|ମୌଜା|ତହସିଲ|ଗ୍ରାମ|ଜିଲ୍ଲା|ଠିକଣା)[:\\s\\-]+|(?:at[/\\-\\s]+po[:\\s\\-]+)|(?:at[:\\-\\s]+))([A-Za-z\\u0B00-\\u0B7F]+)".toRegex(RegexOption.IGNORE_CASE)
         val match = regex.find(text)?.groupValues?.getOrNull(1)?.trim()
         if (!match.isNullOrBlank() && match.length >= 3) {
             return match
@@ -288,18 +385,23 @@ object LocationExtractor {
             }
         }
 
-        // Build sorted list of LocationGroupData
+        // Build sorted list of LocationGroupData:
+        // All locations are treated equally; groups with documents are listed first by count, then alphabetically.
+        // "Unassigned / General" is placed at the end.
         val allLocationKeys = (groups.keys + locationPairs.keys).distinct().sortedWith(
             Comparator { a, b ->
-                // Keep Unassigned at the end, Kesinga & Bhawanipatna near the top
                 when {
-                    a == "Unassigned / General" -> 1
-                    b == "Unassigned / General" -> -1
-                    a.equals("Kesinga", ignoreCase = true) -> -1
-                    b.equals("Kesinga", ignoreCase = true) -> 1
-                    a.equals("Bhawanipatna", ignoreCase = true) -> -1
-                    b.equals("Bhawanipatna", ignoreCase = true) -> 1
-                    else -> a.compareTo(b)
+                    a == "Unassigned / General" && b != "Unassigned / General" -> 1
+                    b == "Unassigned / General" && a != "Unassigned / General" -> -1
+                    else -> {
+                        val docsA = (groups[a]?.size ?: 0) + (locationPairs[a]?.size ?: 0)
+                        val docsB = (groups[b]?.size ?: 0) + (locationPairs[b]?.size ?: 0)
+                        if (docsA != docsB) {
+                            docsB.compareTo(docsA)
+                        } else {
+                            a.compareTo(b, ignoreCase = true)
+                        }
+                    }
                 }
             }
         )

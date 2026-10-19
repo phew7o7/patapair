@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -32,9 +33,11 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -64,18 +67,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.db.PataDatabaseHelper
 import com.example.engine.LocationExtractor
 import com.example.engine.LocationGroupData
+import com.example.export.ExportManager
+import com.example.export.ExportResult
 import com.example.model.DocumentRecord
 import com.example.model.MatchPairRecord
 import com.example.model.MatchStatus
@@ -86,6 +94,7 @@ import com.example.ui.theme.StatusGreen
 import com.example.ui.theme.StatusRed
 import com.example.util.DocumentThumbnailView
 import com.example.viewmodel.PataPairViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,18 +103,26 @@ fun LocationGroupsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToAiPairs: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val documents by viewModel.documents.collectAsState()
     val matchPairs by viewModel.matchPairs.collectAsState()
     val persons by viewModel.persons.collectAsState()
     val isMatchingRunning by viewModel.isMatchingRunning.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
-    var expandedGroupKey by remember { mutableStateOf<String?>("Kesinga") }
     var viewingDocument by remember { mutableStateOf<DocumentRecord?>(null) }
+    var isExportingPdf by remember { mutableStateOf(false) }
+    var exportResult by remember { mutableStateOf<ExportResult?>(null) }
+    var exportingTitle by remember { mutableStateOf("") }
 
     // Group documents and pairs by location dynamically
     val locationGroups = remember(documents, matchPairs) {
         LocationExtractor.groupDocumentsAndPairs(documents, matchPairs)
+    }
+
+    var expandedGroupKey by remember(locationGroups) {
+        mutableStateOf<String?>(locationGroups.firstOrNull { it.totalDocuments > 0 }?.locationKey)
     }
 
     val filteredGroups = remember(locationGroups, searchQuery) {
@@ -156,6 +173,26 @@ fun LocationGroupsScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = {
+                            if (!isExportingPdf && locationGroups.any { it.totalDocuments > 0 }) {
+                                isExportingPdf = true
+                                exportingTitle = "All Locations Dossier"
+                                coroutineScope.launch {
+                                    val res = ExportManager.exportAllLocationsPdf(
+                                        context = context,
+                                        locationGroups = locationGroups,
+                                        dbHelper = PataDatabaseHelper.getInstance(context)
+                                    )
+                                    exportResult = res
+                                    isExportingPdf = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.testTag("btn_export_all_locations_pdf")
+                    ) {
+                        Icon(Icons.Default.PictureAsPdf, contentDescription = "Compile Images into PDF", tint = Color.White)
+                    }
+                    IconButton(
                         onClick = { viewModel.loadDataFromDatabase() },
                         modifier = Modifier.testTag("btn_refresh_locations")
                     ) {
@@ -184,7 +221,22 @@ fun LocationGroupsScreen(
                     totalLocations = locationGroups.size,
                     totalDocs = totalGroupedDocs,
                     totalPairs = totalGroupedPairs,
-                    onNavigateToAiPairs = onNavigateToAiPairs
+                    onNavigateToAiPairs = onNavigateToAiPairs,
+                    onCompileAllPdf = {
+                        if (!isExportingPdf) {
+                            isExportingPdf = true
+                            exportingTitle = "All Locations Dossier"
+                            coroutineScope.launch {
+                                val res = ExportManager.exportAllLocationsPdf(
+                                    context = context,
+                                    locationGroups = locationGroups,
+                                    dbHelper = PataDatabaseHelper.getInstance(context)
+                                )
+                                exportResult = res
+                                isExportingPdf = false
+                            }
+                        }
+                    }
                 )
             }
 
@@ -196,7 +248,7 @@ fun LocationGroupsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("input_search_location"),
-                    placeholder = { Text("Filter location (e.g. Kesinga, Bhawanipatna...)") },
+                    placeholder = { Text("Filter locations (e.g. mouza, tahasil, town...)") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -240,6 +292,21 @@ fun LocationGroupsScreen(
                         },
                         onViewDocument = { doc ->
                             viewingDocument = doc
+                        },
+                        onExportPdf = {
+                            if (!isExportingPdf) {
+                                isExportingPdf = true
+                                exportingTitle = group.displayName
+                                coroutineScope.launch {
+                                    val res = ExportManager.exportLocationDossierPdf(
+                                        context = context,
+                                        locationGroup = group,
+                                        dbHelper = PataDatabaseHelper.getInstance(context)
+                                    )
+                                    exportResult = res
+                                    isExportingPdf = false
+                                }
+                            }
                         }
                     )
                 }
@@ -254,6 +321,73 @@ fun LocationGroupsScreen(
             onDismiss = { viewingDocument = null }
         )
     }
+
+    // PDF Exporting Loading Dialog
+    if (isExportingPdf) {
+        AlertDialog(
+            onDismissRequest = { /* cannot dismiss while exporting */ },
+            title = { Text("Compiling Location PDF...") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFFC77700))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Compiling location-sorted document images and matching dossiers for $exportingTitle...")
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // PDF Export Result Dialog
+    exportResult?.let { res ->
+        AlertDialog(
+            onDismissRequest = { exportResult = null },
+            icon = {
+                Icon(
+                    Icons.Default.PictureAsPdf,
+                    contentDescription = null,
+                    tint = if (res.isSuccess) Color(0xFF1E5E3A) else MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(if (res.isSuccess) "PDF Dossier Generated!" else "Export Failed") },
+            text = {
+                Text(res.summary, style = MaterialTheme.typography.bodyMedium)
+            },
+            confirmButton = {
+                if (res.isSuccess && res.shareUri != null) {
+                    Button(
+                        onClick = {
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_STREAM, res.shareUri)
+                                type = "application/pdf"
+                                flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Location PDF"))
+                            exportResult = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E5E3A)),
+                        modifier = Modifier.testTag("btn_share_location_pdf")
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Share / Open PDF")
+                    }
+                } else {
+                    Button(onClick = { exportResult = null }) {
+                        Text("OK")
+                    }
+                }
+            },
+            dismissButton = {
+                if (res.isSuccess && res.shareUri != null) {
+                    TextButton(onClick = { exportResult = null }) {
+                        Text("Dismiss")
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -261,7 +395,8 @@ fun LocationHeaderBanner(
     totalLocations: Int,
     totalDocs: Int,
     totalPairs: Int,
-    onNavigateToAiPairs: () -> Unit
+    onNavigateToAiPairs: () -> Unit,
+    onCompileAllPdf: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
@@ -301,7 +436,7 @@ fun LocationHeaderBanner(
             }
 
             Text(
-                "All Patta (ROR) and Aadhaar documents are grouped by their village, tahasil, or town (e.g. Kesinga, Bhawanipatna). Cross-corroboration matches records inside their home location.",
+                "All Patta (ROR) and Aadhaar documents are grouped by their village, tahasil, or town. Cross-corroboration matches records inside their home location.",
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = 12.sp,
                 lineHeight = 16.sp
@@ -315,6 +450,20 @@ fun LocationHeaderBanner(
                 MetricPill(label = "Locations", value = "$totalLocations", color = Color.White, modifier = Modifier.weight(1f))
                 MetricPill(label = "Total Documents", value = "$totalDocs", color = Color(0xFFFFE0B2), modifier = Modifier.weight(1f))
                 MetricPill(label = "Matched Pairs", value = "$totalPairs", color = Color(0xFFC8E6C9), modifier = Modifier.weight(1f))
+            }
+
+            // Dedicated PDF compilation button
+            Button(
+                onClick = onCompileAllPdf,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8D4004)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("btn_compile_all_locations_pdf")
+            ) {
+                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Compile Location Images into PDF", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
 
             // Quick button to AI Pairs
@@ -350,13 +499,13 @@ fun LocationGroupCard(
     onRunSmartMatchInLocation: () -> Unit,
     onConfirmPair: (String) -> Unit,
     onRejectPair: (String) -> Unit,
-    onViewDocument: (DocumentRecord) -> Unit
+    onViewDocument: (DocumentRecord) -> Unit,
+    onExportPdf: () -> Unit = {}
 ) {
     var selectedSubTabIndex by remember { mutableIntStateOf(0) }
 
     val hasPairs = group.matchedCount > 0
-    val isProminent = group.locationKey.equals("Kesinga", ignoreCase = true) ||
-                      group.locationKey.equals("Bhawanipatna", ignoreCase = true)
+    val isProminent = group.matchedCount > 0
 
     Card(
         modifier = Modifier
@@ -381,7 +530,7 @@ fun LocationGroupCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -418,11 +567,24 @@ fun LocationGroupCard(
                     }
                 }
 
-                IconButton(onClick = onToggleExpand) {
-                    Icon(
-                        if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = "Expand"
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onExportPdf,
+                        modifier = Modifier.testTag("btn_export_group_pdf_${group.locationKey}")
+                    ) {
+                        Icon(
+                            Icons.Default.PictureAsPdf,
+                            contentDescription = "Export ${group.locationKey} PDF",
+                            tint = Color(0xFFC77700),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    IconButton(onClick = onToggleExpand) {
+                        Icon(
+                            if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = "Expand"
+                        )
+                    }
                 }
             }
 
@@ -704,13 +866,13 @@ fun LocationEmptyCard(onSeedData: () -> Unit) {
 
             Text("No Locations Detected Yet", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Text(
-                "Locations like Kesinga, Bhawanipatna, Dharamgarh, and other Odisha mouzas will automatically appear here when documents are imported and scanned.",
+                "Extracted Odisha mouzas, tahasils, and villages will automatically appear here when documents are imported and scanned.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             OutlinedButton(onClick = onSeedData) {
-                Text("Seed Test Records (Kesinga & Bhawanipatna)")
+                Text("Seed Verification Test Records")
             }
         }
     }
