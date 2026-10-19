@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
+import com.example.util.DocumentThumbnailView
+import com.example.util.FullscreenDocumentDialog
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.TableChart
@@ -73,9 +78,10 @@ import com.example.model.MatchStatus
 import com.example.model.PersonRecord
 import com.example.model.getConflictingEvidence
 import com.example.model.getSupportingEvidence
+import com.example.model.getLocationStatusNote
 import com.example.viewmodel.PataPairViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ManualReviewScreen(
     viewModel: PataPairViewModel,
@@ -87,21 +93,30 @@ fun ManualReviewScreen(
     val aiStatus by viewModel.aiStatus.collectAsState()
     val diagnostics by viewModel.matchingDiagnostics.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val suggestedPairs = matchPairs.filter { it.status == MatchStatus.SUGGESTED }
+    val needsReviewPairs = matchPairs.filter { it.status == MatchStatus.NEEDS_REVIEW }
+    val verifiedPairs = matchPairs.filter { it.status == MatchStatus.VERIFIED }
+    val allActiveCandidates = matchPairs.filter { it.status != MatchStatus.REJECTED }
+
+    var selectedTabIndex by remember(suggestedPairs.size, needsReviewPairs.size, verifiedPairs.size) {
+        mutableIntStateOf(
+            if (suggestedPairs.isNotEmpty()) 0
+            else if (needsReviewPairs.isNotEmpty()) 1
+            else if (verifiedPairs.isNotEmpty()) 2
+            else 0
+        )
+    }
     var editingPerson by remember { mutableStateOf<PersonRecord?>(null) }
     var editNameValue by remember { mutableStateOf("") }
 
     var showManualPairDialog by remember { mutableStateOf(false) }
     var alreadyVerifiedWarningPair by remember { mutableStateOf<PairData?>(null) }
 
-    val suggestedPairs = matchPairs.filter { it.status == MatchStatus.SUGGESTED }
-    val needsReviewPairs = matchPairs.filter { it.status == MatchStatus.NEEDS_REVIEW }
-    val verifiedPairs = matchPairs.filter { it.status == MatchStatus.VERIFIED }
-
     val currentList = when (selectedTabIndex) {
         0 -> suggestedPairs
         1 -> needsReviewPairs
         2 -> verifiedPairs
+        3 -> allActiveCandidates
         else -> matchPairs
     }
 
@@ -122,6 +137,12 @@ fun ManualReviewScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.reprocessUnextractedDocuments() },
+                        modifier = Modifier.testTag("btn_rescan_from_review")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Re-scan & Match", tint = Color.White)
+                    }
                     Button(
                         onClick = { showManualPairDialog = true },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
@@ -189,7 +210,7 @@ fun ManualReviewScreen(
                 }
             }
 
-            // Matching Pipeline Diagnostic Summary Card
+            // Matching Pipeline Diagnostic Summary Card (Responsive Layout)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -197,13 +218,21 @@ fun ManualReviewScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Row(
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
                             Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
@@ -216,36 +245,51 @@ fun ManualReviewScreen(
                             OutlinedButton(
                                 onClick = { viewModel.reprocessUnextractedDocuments() },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp).testTag("btn_reparse_records")
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 28.dp)
+                                    .testTag("btn_reparse_records")
                             ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text("Re-parse", fontSize = 11.sp)
                             }
                             Button(
                                 onClick = { viewModel.generateMatchSuggestions() },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp).testTag("btn_rerun_matcher")
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 28.dp)
+                                    .testTag("btn_rerun_matcher")
                             ) {
-                                Text("Re-run", fontSize = 11.sp)
+                                Text("Re-run Matcher", fontSize = 11.sp)
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "• Eligible Records: ${diagnostics.eligibleAadhaarCount} Aadhaar (${diagnostics.missingNameAadhaarCount} missing names) | ${diagnostics.eligibleLandCount} Land Records (${diagnostics.missingNameLandCount} missing names)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "• Candidate Evaluation: ${diagnostics.totalCandidatesEvaluated} pairs evaluated | ${diagnostics.candidatesRejectedByFilters} rejected by surname/similarity filters",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "• Candidate Triage: ${diagnostics.candidatesSuggested} suggested, ${diagnostics.candidatesNeedsReview} need review, ${diagnostics.candidatesVerified} verified by user",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "• Eligible Records: ${diagnostics.eligibleAadhaarCount} Aadhaar (${diagnostics.missingNameAadhaarCount} missing names) | ${diagnostics.eligibleLandCount} Land Records (${diagnostics.missingNameLandCount} missing names)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val evalText = if (diagnostics.isEvaluatedCountEstimated) {
+                            "• Candidate Evaluation: ${diagnostics.totalCandidatesEvaluated} pairs evaluated (estimated matrix: ${diagnostics.eligibleAadhaarCount} × ${diagnostics.eligibleLandCount}) | ${diagnostics.candidatesRejectedByFilters} rejected by filters"
+                        } else {
+                            "• Candidate Evaluation: ${diagnostics.totalCandidatesEvaluated} pairs evaluated (actual run) | ${diagnostics.candidatesRejectedByFilters} rejected by filters"
+                        }
+                        Text(
+                            text = evalText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "• Candidate Triage: ${diagnostics.candidatesSuggested} suggested, ${diagnostics.candidatesNeedsReview} need review, ${diagnostics.candidatesVerified} verified by user",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
@@ -256,36 +300,79 @@ fun ManualReviewScreen(
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { selectedTabIndex = 0 },
-                    text = { Text("Suggested (${suggestedPairs.size})", fontSize = 12.sp) }
+                    text = { Text("Suggested (${suggestedPairs.size})", fontSize = 11.sp, fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Normal) }
                 )
                 Tab(
                     selected = selectedTabIndex == 1,
                     onClick = { selectedTabIndex = 1 },
-                    text = { Text("Needs Review (${needsReviewPairs.size})", fontSize = 12.sp) }
+                    text = { Text("Needs Review (${needsReviewPairs.size})", fontSize = 11.sp, fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Normal) }
                 )
                 Tab(
                     selected = selectedTabIndex == 2,
                     onClick = { selectedTabIndex = 2 },
-                    text = { Text("Verified by User (${verifiedPairs.size})", fontSize = 12.sp) }
+                    text = { Text("Verified (${verifiedPairs.size})", fontSize = 11.sp, fontWeight = if (selectedTabIndex == 2) FontWeight.Bold else FontWeight.Normal) }
+                )
+                Tab(
+                    selected = selectedTabIndex == 3,
+                    onClick = { selectedTabIndex = 3 },
+                    text = { Text("All Active (${allActiveCandidates.size})", fontSize = 11.sp, fontWeight = if (selectedTabIndex == 3) FontWeight.Bold else FontWeight.Normal) }
                 )
             }
 
             if (currentList.isEmpty()) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = when (selectedTabIndex) {
-                                0 -> "No suggested pairs awaiting review."
+                                0 -> if (needsReviewPairs.isNotEmpty()) {
+                                    "0 pairs meet auto-suggested confidence, but you have ${needsReviewPairs.size} candidates in 'Needs Review'!"
+                                } else {
+                                    "No suggested pairs currently awaiting review."
+                                }
                                 1 -> "No pairs requiring manual review."
                                 2 -> "No verified pairs yet. Approve suggestions or create manual pairs."
-                                else -> "No pairs available."
+                                else -> "No active candidate pairs found in database."
                             },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        if (selectedTabIndex == 0 && needsReviewPairs.isNotEmpty()) {
+                            Button(
+                                onClick = { selectedTabIndex = 1 },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Text("View Review Candidates (${needsReviewPairs.size})")
+                            }
+                        } else {
+                            Button(
+                                onClick = { viewModel.reprocessUnextractedDocuments() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E5E3A))
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("⚡ Re-scan & Match All Odia Documents")
+                            }
+                        }
                     }
                 }
             } else {
@@ -581,6 +668,7 @@ fun MatchPairCard(
 ) {
     val supportingEvidence = remember(pair.matchExplanation) { pair.getSupportingEvidence() }
     val conflictingEvidence = remember(pair.matchExplanation) { pair.getConflictingEvidence() }
+    var previewingDoc by remember { mutableStateOf<DocumentRecord?>(null) }
 
     Card(
         modifier = Modifier
@@ -618,8 +706,8 @@ fun MatchPairCard(
                         Text(
                             text = when (pair.status) {
                                 MatchStatus.VERIFIED -> "${pair.personCode ?: "Verified"} • VERIFIED BY USER"
-                                MatchStatus.SUGGESTED -> "SUGGESTED MATCH • ${(pair.matchConfidence * 100).toInt()}%"
-                                MatchStatus.NEEDS_REVIEW -> "NEEDS REVIEW • ${(pair.matchConfidence * 100).toInt()}%"
+                                MatchStatus.SUGGESTED -> "SUGGESTED CANDIDATE • Score ${(pair.matchConfidence * 100).toInt()}%"
+                                MatchStatus.NEEDS_REVIEW -> "NEEDS REVIEW • Score ${(pair.matchConfidence * 100).toInt()}%"
                                 MatchStatus.REJECTED -> "REJECTED"
                             },
                             style = MaterialTheme.typography.labelSmall,
@@ -643,12 +731,12 @@ fun MatchPairCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Two-Pane Side by Side with Source References
+            // Two-Pane Side by Side with Visual Document Thumbnails & Metadata
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Aadhaar Document Details
+                // Aadhaar Document Details & Image Preview
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
@@ -668,7 +756,20 @@ fun MatchPairCard(
                                 Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF2563EB), modifier = Modifier.size(13.dp))
                             }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Visual Document Preview (PDF or Image)
+                        DocumentThumbnailView(
+                            doc = aadhaarDoc,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(105.dp),
+                            label = "Aadhaar Image",
+                            onEnlargeRequested = { previewingDoc = aadhaarDoc }
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(pair.aadhaarName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text(aadhaarDoc?.originalFilename ?: "Aadhaar Document", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (aadhaarDoc?.aadhaarNumberMasked != null) {
@@ -677,7 +778,7 @@ fun MatchPairCard(
                     }
                 }
 
-                // Land Record Document Details (With Exact PDF Page)
+                // Land Record Document Details (With Exact PDF Page & Image Preview)
                 Card(
                     modifier = Modifier.weight(1f),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4))
@@ -697,7 +798,20 @@ fun MatchPairCard(
                                 Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF1E5E3A), modifier = Modifier.size(13.dp))
                             }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Visual Document Preview (PDF page or Image)
+                        DocumentThumbnailView(
+                            doc = landDoc,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(105.dp),
+                            label = "Patta Pg ${landDoc?.pdfPageNumber ?: 1}",
+                            onEnlargeRequested = { previewingDoc = landDoc }
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(pair.landNameOriginal, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text("Translit: ${pair.landNameTransliterated}", style = MaterialTheme.typography.labelSmall, color = Color(0xFF1E5E3A))
                         val pageInfo = if (landDoc != null) " (Page ${landDoc.pdfPageNumber} of ${landDoc.totalPdfPages})" else ""
@@ -751,7 +865,20 @@ fun MatchPairCard(
                         }
                     }
 
-                    if (supportingEvidence.isEmpty() && conflictingEvidence.isEmpty()) {
+                    val locNote = remember(pair.matchExplanation) { pair.getLocationStatusNote() }
+                    if (locNote != null) {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Row(
+                            modifier = Modifier.padding(vertical = 1.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(locNote, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    if (supportingEvidence.isEmpty() && conflictingEvidence.isEmpty() && locNote == null) {
                         Text(pair.matchExplanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -787,5 +914,12 @@ fun MatchPairCard(
                 }
             }
         }
+    }
+
+    if (previewingDoc != null) {
+        FullscreenDocumentDialog(
+            doc = previewingDoc!!,
+            onDismiss = { previewingDoc = null }
+        )
     }
 }

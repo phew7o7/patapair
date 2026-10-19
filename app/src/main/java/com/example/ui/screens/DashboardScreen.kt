@@ -23,10 +23,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
@@ -39,6 +41,7 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
+import com.example.util.DocumentThumbnailView
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,6 +87,8 @@ import com.example.viewmodel.PataPairViewModel
 @Composable
 fun DashboardScreen(
     viewModel: PataPairViewModel,
+    onNavigateToAiPairs: () -> Unit = {},
+    onNavigateToLocationGroups: () -> Unit = {},
     onNavigateToLandRecords: () -> Unit,
     onNavigateToManualReview: () -> Unit,
     onNavigateToExport: () -> Unit
@@ -246,7 +251,83 @@ fun DashboardScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Navigation Quick Links Row
+            // Feature Hero Navigation Cards (AI Pairs & Location Groups)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // AI Pairs Card
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onNavigateToAiPairs() }
+                        .testTag("hero_card_ai_pairs"),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B5E20)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFFFD54F), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("AI Pairs", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Text(
+                            "$suggestedPairsCount matches found",
+                            color = Color(0xFFC8E6C9),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "See pairs AI made →",
+                            color = Color(0xFFFFD54F),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Location Groups Card
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onNavigateToLocationGroups() }
+                        .testTag("hero_card_location_groups"),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFC77700)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Place, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("By Location", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
+                        Text(
+                            "Kesinga, Bhawanipatna...",
+                            color = Color(0xFFFFE0B2),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Explore groups →",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Secondary Quick Navigation Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -260,14 +341,13 @@ fun DashboardScreen(
                     Text("Pata View", fontSize = 12.sp)
                 }
 
-                Button(
+                OutlinedButton(
                     onClick = onNavigateToManualReview,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.weight(1f).testTag("nav_manual_review")
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Review Pairs", fontSize = 12.sp)
+                    Text("Review", fontSize = 12.sp)
                 }
 
                 OutlinedButton(
@@ -545,15 +625,39 @@ fun DashboardScreen(
                             )
                         }
 
-                        if (failedCount > 0 && !isProcessing) {
-                            TextButton(
-                                onClick = { viewModel.retryFailedDocuments() },
-                                modifier = Modifier.testTag("btn_retry_failed"),
-                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text("Retry ($failedCount)", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (!isProcessing) {
+                                TextButton(
+                                    onClick = { viewModel.reprocessUnextractedDocuments() },
+                                    modifier = Modifier.testTag("btn_reprocess_unextracted"),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("⚡ Match All", fontSize = 11.sp, color = Color(0xFF1E5E3A), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            if (unknownCount > 0 && !isProcessing) {
+                                TextButton(
+                                    onClick = { viewModel.reprocessUnknownDocuments() },
+                                    modifier = Modifier.testTag("btn_reprocess_unknown"),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Re-scan Unknown ($unknownCount)", fontSize = 11.sp, color = Color(0xFFB45309), fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            if (failedCount > 0 && !isProcessing) {
+                                TextButton(
+                                    onClick = { viewModel.retryFailedDocuments() },
+                                    modifier = Modifier.testTag("btn_retry_failed"),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("Retry ($failedCount)", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
                     }
@@ -894,9 +998,17 @@ fun DocumentItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            DocumentThumbnailView(
+                doc = document,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(6.dp))
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(

@@ -119,10 +119,41 @@ class PataDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_MATCH_PAIRS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_PERSONS")
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_DOCUMENTS")
+        // Safe, non-destructive migration: never DROP tables or destroy user data
         onCreate(db)
+        ensureColumnsExist(db)
+    }
+
+    private fun ensureColumnsExist(db: SQLiteDatabase) {
+        ensureColumn(db, TABLE_DOCUMENTS, "mouza", "TEXT")
+        ensureColumn(db, TABLE_DOCUMENTS, "district", "TEXT")
+        ensureColumn(db, TABLE_DOCUMENTS, "tahasil", "TEXT")
+        ensureColumn(db, TABLE_DOCUMENTS, "khata_number", "TEXT")
+        ensureColumn(db, TABLE_DOCUMENTS, "plot_number", "TEXT")
+        ensureColumn(db, TABLE_DOCUMENTS, "aadhaar_number_masked", "TEXT")
+        ensureColumn(db, TABLE_MATCH_PAIRS, "person_code", "TEXT")
+        ensureColumn(db, TABLE_MATCH_PAIRS, "is_manual", "INTEGER DEFAULT 0")
+    }
+
+    private fun ensureColumn(db: SQLiteDatabase, table: String, column: String, typeDef: String) {
+        try {
+            val cursor = db.rawQuery("PRAGMA table_info($table)", null)
+            var exists = false
+            cursor.use {
+                val nameIdx = it.getColumnIndex("name")
+                while (it.moveToNext()) {
+                    if (it.getString(nameIdx).equals(column, ignoreCase = true)) {
+                        exists = true
+                        break
+                    }
+                }
+            }
+            if (!exists) {
+                db.execSQL("ALTER TABLE $table ADD COLUMN $column $typeDef")
+            }
+        } catch (ignored: Exception) {
+            // Table might not exist yet or alter failed harmlessly
+        }
     }
 
     // --- Document Operations ---
@@ -362,6 +393,46 @@ class PataDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.beginTransaction()
         try {
             for (pair in pairs) {
+                val values = ContentValues().apply {
+                    put("id", pair.id)
+                    put("aadhaar_doc_id", pair.aadhaarDocId)
+                    put("land_doc_id", pair.landDocId)
+                    put("aadhaar_person_id", pair.aadhaarPersonId)
+                    put("land_person_id", pair.landPersonId)
+                    put("aadhaar_name", pair.aadhaarName)
+                    put("land_name_original", pair.landNameOriginal)
+                    put("land_name_transliterated", pair.landNameTransliterated)
+                    put("match_confidence", pair.matchConfidence)
+                    put("match_explanation", pair.matchExplanation)
+                    put("status", pair.status.name)
+                    put("is_manual", if (pair.isManual) 1 else 0)
+                    put("person_code", pair.personCode)
+                    put("timestamp", pair.timestamp)
+                }
+                db.insertWithOnConflict(TABLE_MATCH_PAIRS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /**
+     * Replaces unverified automatically-generated match pairs while strictly preserving all
+     * user decisions (VERIFIED, REJECTED, and manual pairs).
+     */
+    fun replaceUnverifiedMatchPairs(newPairs: List<MatchPairRecord>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // Delete only unverified automatic pairs (SUGGESTED and NEEDS_REVIEW)
+            db.delete(
+                TABLE_MATCH_PAIRS,
+                "status IN (?, ?) AND is_manual = 0",
+                arrayOf(MatchStatus.SUGGESTED.name, MatchStatus.NEEDS_REVIEW.name)
+            )
+
+            for (pair in newPairs) {
                 val values = ContentValues().apply {
                     put("id", pair.id)
                     put("aadhaar_doc_id", pair.aadhaarDocId)

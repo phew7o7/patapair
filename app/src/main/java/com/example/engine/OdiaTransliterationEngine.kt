@@ -227,15 +227,96 @@ object OdiaTransliterationEngine {
         n = n.replace("padhee", "padhi")
         n = n.replace("misra", "mishra")
         n = n.replace("choudhury", "choudhary")
+        n = n.replace("manjhi", "majhi")
+        n = n.replace("pradhani", "pradhan")
+        n = n.replace("chandana", "chandan")
+        n = n.replace("tandy", "tandi")
+        n = n.replace("gauda", "gouda")
+        n = n.replace("baga", "bag")
+        n = n.replace("dipa", "deep")
+        n = n.replace("patela", "patel")
+        n = n.replace("sunany", "sunani")
+        n = n.replace("muduly", "muduli")
+        n = n.replace("sethy", "sethi")
 
-        // Standardize common letter variations: ee -> i, oo -> u, w -> v, sh -> s
+        // Cross-script consonant & phonetic harmonizations:
+        // 'ksh' and 'x' are commonly written as 'kh' in Odisha (e.g. Lakheswar / Laksheswar)
+        n = n.replace("ksh", "kh")
+        n = n.replace("x", "kh")
+        n = n.replace("shw", "sw")
+        n = n.replace("sh", "s")
         n = n.replace("ee", "i")
         n = n.replace("oo", "u")
-        n = n.replace("w", "v")
-        n = n.replace("sh", "s")
+        // In Odia script 'b' and 'v'/'w' are represented similarly (e.g. Laksheshbar vs Laksheshwar)
+        n = n.replace("w", "b")
+        n = n.replace("v", "b")
         n = n.replace("bhabani", "bhavani")
 
-        // Clean extra whitespace
-        return n.split("\\s+".toRegex()).filter { it.isNotBlank() }.joinToString(" ")
+        // De-duplicate double consonants (Dillip -> Dilip, Pattnaik -> Patnaik)
+        n = n.replace("ll", "l")
+            .replace("tt", "t")
+            .replace("dd", "d")
+            .replace("nn", "n")
+            .replace("mm", "m")
+            .replace("pp", "p")
+            .replace("bb", "b")
+            .replace("kk", "k")
+
+        // Clean extra whitespace and apply phonetic terminal schwa normalization for Odia given names
+        val tokens = n.split("\\s+".toRegex()).filter { it.isNotBlank() }.map { token ->
+            var t = token
+            // Specific frequent Odia transliterations
+            when {
+                t.endsWith("kumara") -> t = t.substring(0, t.length - 1)
+                t.endsWith("ranjana") -> t = t.substring(0, t.length - 1)
+                t.endsWith("singha") -> t = t.substring(0, t.length - 1)
+                t.endsWith("pradhana") -> t = t.substring(0, t.length - 1)
+                t.endsWith("nayaka") -> t = t.substring(0, t.length - 1)
+                t.endsWith("dasa") -> t = t.substring(0, t.length - 1)
+                t.endsWith("barika") -> t = t.substring(0, t.length - 1)
+                t.endsWith("manasa") -> t = t.substring(0, t.length - 1)
+                t.endsWith("bijaya") -> t = t.substring(0, t.length - 1)
+                t.endsWith("sanjaya") -> t = t.substring(0, t.length - 1)
+                t.endsWith("niranjana") -> t = t.substring(0, t.length - 1)
+                t.endsWith("ashoka") -> t = t.substring(0, t.length - 1)
+                t.endsWith("aloka") -> t = t.substring(0, t.length - 1)
+                t.endsWith("deepaka") -> t = t.substring(0, t.length - 1)
+                t.endsWith("subodha") -> t = t.substring(0, t.length - 1)
+                t.endsWith("pramoda") -> t = t.substring(0, t.length - 1)
+                t.endsWith("santosa") -> t = t.substring(0, t.length - 1)
+                t.endsWith("dillipa") -> t = "dilip"
+                t.endsWith("dilipa") -> t = "dilip"
+                t.endsWith("duryodhana") -> t = "duryodhan"
+                t.endsWith("ghasirama") -> t = "ghasiram"
+                t.endsWith("tikarama") -> t = "tikaram"
+                t.endsWith("purnachandra") -> t = "purnachandra"
+                t.endsWith("purnachandraa") -> t = "purnachandra"
+                else -> {
+                    // Terminal inherent 'a' on consonant stems (e.g. 'sa', 'na', 'ka', 'pa', 'ma')
+                    // Exclude root endings like -tra (Mohapatra), -hra (Mishra), -nda (Panda), -ida (Parida), -era (Behera), -ena (Jena)
+                    if (t.length >= 5 && t.endsWith("a") && !t.endsWith("aa")) {
+                        val prev = t[t.length - 2]
+                        if (prev in "rnkdmpyst" &&
+                            !t.endsWith("tra") && !t.endsWith("hra") && !t.endsWith("dra") &&
+                            !t.endsWith("nda") && !t.endsWith("ida") && !t.endsWith("era") &&
+                            !t.endsWith("ena") && !t.endsWith("uta")
+                        ) {
+                            t = t.substring(0, t.length - 1)
+                        }
+                    }
+                }
+            }
+            t
+        }
+
+        return tokens.joinToString(" ")
+    }
+
+    /**
+     * Compact string representation for compound given name comparison
+     * (e.g. "Ghasi Ram" <-> "Ghasiram", "Purna Chandra" <-> "Purnachandra")
+     */
+    fun compactPhonetic(name: String): String {
+        return normalizeForMatching(name).replace("[^a-z]".toRegex(), "")
     }
 }

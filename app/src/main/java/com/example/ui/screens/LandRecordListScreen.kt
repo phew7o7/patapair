@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.TableChart
+import com.example.util.DocumentThumbnailView
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -239,6 +240,16 @@ fun LandRecordCard(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
+
+            DocumentThumbnailView(
+                doc = document,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(130.dp),
+                label = "Patta Page ${document.pdfPageNumber}"
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Khata & Plot tags
             Row(

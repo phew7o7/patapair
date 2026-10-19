@@ -47,20 +47,36 @@ object DocumentClassifier {
         "district" to 5f
     )
 
-    // Aadhaar Keywords
+    // Aadhaar Keywords (English, Odia, Hindi)
     private val AADHAAR_KEYWORDS = listOf(
         "government of india" to 30f,
         "unique identification authority" to 30f,
         "uidai" to 30f,
         "aadhaar" to 35f,
+        "ଭାରତ ସରକାର" to 35f,
+        "ଭାରତୀୟ ବିଶିଷ୍ଟ ପରିଚୟ ପ୍ରାଧିକରଣ" to 35f,
+        "ଆଧାର" to 35f,
+        "ଜନ୍ମ ତାରିଖ" to 20f,
+        "ପୁରୁଷ" to 15f,
+        "ମହିଳା" to 15f,
+        "ଠିକଣା" to 15f,
+        "भारत सरकार" to 30f,
+        "आधार" to 30f,
         "enrollment no" to 20f,
         "help@uidai.gov.in" to 25f,
         "www.uidai.gov.in" to 25f,
         "meraaadhaar" to 20f,
         "dob:" to 15f,
         "date of birth" to 15f,
+        "yob:" to 15f,
+        "year of birth" to 15f,
         "female" to 10f,
-        "male" to 10f
+        "male" to 10f,
+        "s/o" to 15f,
+        "d/o" to 15f,
+        "w/o" to 15f,
+        "c/o" to 15f,
+        "address" to 10f
     )
 
     // Unrelated document markers (Receipts, invoices, bank passbooks)
@@ -248,8 +264,9 @@ object DocumentClassifier {
         val mouza = mouzaRegex.find(text)?.groupValues?.getOrNull(1)?.lines()?.firstOrNull()?.trim()
 
         // Decision logic
-        if (aadhaarScore >= 50f && aadhaarScore > landScore) {
+        if (aadhaarScore >= 30f && aadhaarScore > landScore) {
             val (personPairs, personDetails) = extractPersonsFromAadhaarWithDetails(text)
+            val aadhaarVillage = mouza ?: LocationExtractor.findLocationInText(text) ?: MatcherEngine.extractVillageFromText(text)
             return DocumentClassifierResult(
                 docType = DocType.AADHAAR,
                 confidence = aadhaarScore, // Store raw classifier heuristic score
@@ -257,6 +274,7 @@ object DocumentClassifier {
                 rulesFired = rulesFired,
                 extractedPersons = personPairs,
                 aadhaarMasked = aadhaarNumberMasked,
+                mouza = aadhaarVillage,
                 extractedPersonDetails = personDetails
             )
         }
@@ -315,10 +333,12 @@ object DocumentClassifier {
         "aadhaar", "aadnaar", "aadh4ar", "aadhmar", "aadha", "aadhar", "aadhhar", "uidai", "uidat", "uid", "vid",
         "government", "govemment", "govement", "india", "unique", "identification", "authority", "autharity", "enrollment",
         "male", "female", "transgender", "dob", "birth", "year", "date",
+        "mai", "malo", "mail", "fein", "femal", "femail", "purusa", "mahila", "gender", "sex",
         "help", "download", "meraaadhaar", "mera", "meri", "pehchan", "address", "pincode", "pin",
-        "state", "district", "father", "husband", "mother", "guardian", "card",
+        "state", "district", "father", "husband", "mother", "guardian", "card", "cardholder",
         "republic", "resident", "electronic", "information", "web", "online",
-        "your", "no", "number", "of", "to", "for", "all", "the", "and", "in", "at", "by", "signature", "valid"
+        "your", "no", "number", "of", "to", "for", "all", "the", "and", "in", "at", "by", "signature", "valid",
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
     )
 
     private val LAND_ADMIN_KEYWORDS = setOf(
@@ -327,10 +347,24 @@ object DocumentClassifier {
         "ସୀମା", "ଉତ୍ତର", "ଦକ୍ଷିଣ", "ପୂର୍ବ", "ପଶ୍ଚିମ", "ଏକର", "ଡେସିମିଲ", "ହେକ୍ଟର", "ଓଡ଼ିଶା", "ଓଡିଶା",
         "ସରକାର", "ଭୂ-ଅଭିଲେଖ", "ଭୂମି", "କ୍ରମିକ", "ମନ୍ତବ୍ୟ", "ଦାଖଲ", "ଦଖଲକାର", "ଖାରଜ", "ରାଜସ୍ୱ",
         "ଜମାବନ୍ଦୀ", "ଖଜଣା", "ଉପକର", "ସେସ", "ମିଶ୍ରିତ", "ନଂ", "ନମ୍ବର", "ବର୍ଗ", "ଫୁଟ",
-        "ବିବରଣୀ", "ବିବରଣ", "ନାମ", "ଜମି", "ସୂଚନା", "ଶାରଦ", "ଜଳାଶୟ", "ଘରବାରୀ", "ତୋଟା", "ପଟ୍ଟା", "ଚକ", "ଦାଗ",
+        "ବିବରଣୀ", "ବିବରଣ", "ନାମ", "ଜମି", "ଜମିଦାର", "ଜମିଦାରଙ୍କ", "ଜମିଦାରୀ", "ମାର୍ଫତ", "ସୂଚନା", "ଶାରଦ",
+        "ଜଳାଶୟ", "ଘରବାରୀ", "ତୋଟା", "ପଟ୍ଟା", "ପଟା", "ଚକ", "ଦାଗ", "ମାଲ", "ଉତ୍ତରମାଳ", "ଗ୍ରାମ",
+        "ପଞ୍ଚାୟତ", "ବ୍ଲକ", "ସର୍କଲ", "ମଣ୍ଡଳ", "ସର୍ବସାଧାରଣ", "ଗୋଚର", "ଅନାବାଦୀ", "ରକ୍ଷିତ", "ଜବରଦଖଲ",
+        "ଦଖଲ", "ଅଂଶ", "ଭାଗ", "ଫର୍ଦ୍ଦ", "ଫର୍ଦ", "ଫର୍ଦ୍ଦ ନଂ", "କ୍ରମ",
         "khatiyan", "khata", "plot", "rayat", "pattadar", "tahasil", "mouza", "district",
         "thana", "kisam", "rakaba", "area", "acre", "decimal", "hectare", "odisha", "government",
-        "bhulekh", "ror", "record of rights", "serial", "remarks", "revenue", "cess", "details"
+        "bhulekh", "ror", "record of rights", "serial", "remarks", "revenue", "cess", "details",
+        "jamidar", "jamidaranka", "mal", "gram"
+    )
+
+    // Common verified Odia surnames & titles to boost recognition of genuine landholders
+    val ODIA_SURNAMES = setOf(
+        "ସାହୁ", "ସାହୂ", "ନାୟକ", "ନାଏକ", "ପ୍ରଧାନ", "ବେହେରା", "ମହାପାତ୍ର", "ମହାନ୍ତି", "ଦାସ", "ଦାଶ",
+        "ରାଉତ", "ରାଉତରାୟ", "ଜେନା", "ସ୍ୱାଇଁ", "ସ୍ବାଇଁ", "ବିଶ୍ୱାଳ", "ବିଶ୍ବାଳ", "ମୁଦୁଲି", "ସେଠୀ", "ପରିଡ଼ା",
+        "ପରିଡା", "ସାମଲ", "ମିଶ୍ର", "ତ୍ରିପାଠୀ", "ପଣ୍ଡା", "ବାରିକ", "ଖଟୁଆ", "ମଲ୍ଲିକ", "ଦେଈ", "ଦେଇ",
+        "ଦାସୀ", "ମାଝି", "ପାତ୍ର", "ପଲେଇ", "ଦଳେଇ", "ଗୌଡ଼", "ଗୌଡ", "ମହାରଣା", "ଓଝା", "ପାଢ଼ୀ", "ପାଢୀ",
+        "କର", "ଷଡ଼ଙ୍ଗୀ", "ଷଡଙ୍ଗୀ", "ସେନାପତି", "ଦେହୁରୀ", "ଲେଙ୍କା", "ଭୋଇ", "ବରାଳ", "ସିଂହ", "ରଥ",
+        "ଖୁଣ୍ଟିଆ", "ସୁନ୍ଦରାୟ", "ଆଚାର୍ଯ୍ୟ", "କୁମାର", "ଚନ୍ଦ୍ର", "ଚରଣ"
     )
 
     private fun extractPersonsFromAadhaarWithDetails(text: String): Pair<List<Pair<String, ScriptType>>, List<com.example.model.ExtractedPersonDraft>> {
@@ -354,10 +388,69 @@ object DocumentClassifier {
         // 2. Identify cardholder name: preceding DOB or Date of Birth line
         for (i in lines.indices) {
             val line = lines[i]
-            if (line.contains("DOB", ignoreCase = true) || line.contains("Year of Birth", ignoreCase = true) || line.contains("Date of Birth", ignoreCase = true)) {
-                // Search backwards for the nearest valid name line
-                for (j in (i - 1) downTo 0) {
+            if (line.contains("DOB", ignoreCase = true) || line.contains("Year of Birth", ignoreCase = true) ||
+                line.contains("Date of Birth", ignoreCase = true) || line.contains("ଜନ୍ମ ତାରିଖ") ||
+                line.contains("ଜନ୍ମ") || line.contains("YOB", ignoreCase = true)) {
+
+                // Check if name is embedded on the same line before DOB
+                val sameLineCandidate = cleanAadhaarCandidate(line.substringBefore("DOB").substringBefore("Date").substringBefore("ଜନ୍ମ").trim())
+                if (isValidAadhaarName(sameLineCandidate)) {
+                    val script = OdiaTransliterationEngine.detectScript(sameLineCandidate)
+                    personDrafts.add(
+                        com.example.model.ExtractedPersonDraft(
+                            name = sameLineCandidate,
+                            script = script,
+                            fatherOrSpouseName = fatherOrGuardianName,
+                            role = "Aadhaar Cardholder"
+                        )
+                    )
+                }
+
+                // Search backwards for valid name lines (support both English and Odia in bilingual cards)
+                for (j in (i - 1) downTo 0.coerceAtLeast(i - 4)) {
                     val candidate = cleanAadhaarCandidate(lines[j])
+                    if (isValidAadhaarName(candidate)) {
+                        val script = OdiaTransliterationEngine.detectScript(candidate)
+                        // Do not add duplicate script if already captured
+                        if (personDrafts.none { it.script == script }) {
+                            personDrafts.add(
+                                com.example.model.ExtractedPersonDraft(
+                                    name = candidate,
+                                    script = script,
+                                    fatherOrSpouseName = fatherOrGuardianName,
+                                    role = "Aadhaar Cardholder"
+                                )
+                            )
+                        }
+                        if (personDrafts.size >= 2) break
+                    }
+                }
+                if (personDrafts.isNotEmpty()) break
+            }
+        }
+
+        // 3. Fallback: select best plausible non-header, non-blacklisted person name
+        if (personDrafts.isEmpty()) {
+            // First pass: look for multi-token names (Given Name + Surname)
+            for (line in lines) {
+                val candidate = cleanAadhaarCandidate(line)
+                if (isValidAadhaarName(candidate) && candidate.split("\\s+".toRegex()).size >= 2) {
+                    val script = OdiaTransliterationEngine.detectScript(candidate)
+                    personDrafts.add(
+                        com.example.model.ExtractedPersonDraft(
+                            name = candidate,
+                            script = script,
+                            fatherOrSpouseName = fatherOrGuardianName,
+                            role = "Aadhaar Cardholder"
+                        )
+                    )
+                    break
+                }
+            }
+            // Second pass: any valid name
+            if (personDrafts.isEmpty()) {
+                for (line in lines) {
+                    val candidate = cleanAadhaarCandidate(line)
                     if (isValidAadhaarName(candidate)) {
                         val script = OdiaTransliterationEngine.detectScript(candidate)
                         personDrafts.add(
@@ -370,26 +463,6 @@ object DocumentClassifier {
                         )
                         break
                     }
-                }
-                if (personDrafts.isNotEmpty()) break
-            }
-        }
-
-        // 3. Fallback: select first plausible non-header, non-blacklisted alphabetic name
-        if (personDrafts.isEmpty()) {
-            for (line in lines) {
-                val candidate = cleanAadhaarCandidate(line)
-                if (isValidAadhaarName(candidate)) {
-                    val script = OdiaTransliterationEngine.detectScript(candidate)
-                    personDrafts.add(
-                        com.example.model.ExtractedPersonDraft(
-                            name = candidate,
-                            script = script,
-                            fatherOrSpouseName = fatherOrGuardianName,
-                            role = "Aadhaar Cardholder"
-                        )
-                    )
-                    break
                 }
             }
         }
@@ -449,9 +522,14 @@ object DocumentClassifier {
 
             if (inRayatSection) {
                 // If line contains next major section header, stop the rayat section
-                if ((line.contains("ଚୌହଦୀ") || line.contains("ଜମିଦାର") || line.contains("ମୋଟ ରକବା")) &&
-                    !line.contains("ରୟତ") && !line.contains("ପିତା") && !line.contains("ପି:")
-                ) {
+                val isNextSectionHeader = (line.contains("କିସମ") || line.contains("ଚୌହଦୀ") ||
+                                           line.contains("ଜମିଦାର") || line.contains("ମୋଟ ରକବା") ||
+                                           line.contains("ପ୍ଲଟ ନଂ") || line.contains("ପ୍ଲଟ୍ ନଂ") ||
+                                           line.contains("Plot", ignoreCase = true)) &&
+                                          !line.contains("ରୟତ") && !line.contains("ପିତା") &&
+                                          !line.contains("ପି:") && !line.contains("ସ୍ୱାମୀ")
+
+                if (isNextSectionHeader) {
                     inRayatSection = false
                 } else {
                     parseAndAddLandPerson(line, personDrafts)
@@ -460,12 +538,29 @@ object DocumentClassifier {
         }
 
         // Fallback: If section headers were obscured by noisy OCR or not triggered,
-        // scan lines containing Odia script
+        // scan lines containing Odia script, prioritizing lines with recognized surnames or kinship markers
+        if (personDrafts.isEmpty()) {
+            // First priority: lines containing known Odia surnames or relationship markers
+            for (line in lines) {
+                val hasSurname = ODIA_SURNAMES.any { line.contains(it) }
+                val hasKinship = line.contains("ପି:") || line.contains("ପିତା") || line.contains("ସ୍ୱାମୀ") || line.contains("ପତ୍ନୀ")
+                if (hasSurname || hasKinship) {
+                    parseAndAddLandPerson(line, personDrafts)
+                    if (personDrafts.size >= 8) break
+                }
+            }
+        }
+
+        // Secondary fallback if still empty: scan remaining Odia lines
         if (personDrafts.isEmpty()) {
             for (line in lines) {
                 if (OdiaTransliterationEngine.detectScript(line) == ScriptType.ODIA) {
-                    parseAndAddLandPerson(line, personDrafts)
-                    if (personDrafts.size >= 8) break // Support multiple co-pattadars per page
+                    // Skip obvious header or metadata lines
+                    val lower = line.lowercase()
+                    if (!lower.contains("ଜିଲ୍ଲା") && !lower.contains("ତହସିଲ") && !lower.contains("ମୌଜା") && !lower.contains("ପ୍ଲଟ")) {
+                        parseAndAddLandPerson(line, personDrafts)
+                        if (personDrafts.size >= 8) break
+                    }
                 }
             }
         }
@@ -561,7 +656,7 @@ object DocumentClassifier {
 
     private fun isValidAadhaarName(str: String): Boolean {
         val trimmed = str.trim()
-        if (trimmed.length < 2 || trimmed.length > 50) return false
+        if (trimmed.length < 3 || trimmed.length > 50) return false
         if (trimmed.any { it.isDigit() }) return false
         if (trimmed.contains("@") || trimmed.contains("http") || trimmed.contains(".com") || trimmed.contains(".gov")) return false
 
@@ -571,8 +666,21 @@ object DocumentClassifier {
 
         // Check word set
         val words = lower.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (words.isEmpty()) return false
         if (words.all { AADHAAR_NON_NAME_WORDS.contains(it) }) return false
-        if (words.any { it == "aadhaar" || it == "aadnaar" || it == "uidai" || it == "dob" || it == "government" || it == "india" }) return false
+        if (words.any { it in AADHAAR_NON_NAME_WORDS }) {
+            // If it's a short 1-2 word string containing a blacklisted word, reject
+            if (words.size <= 2 && words.any { it == "male" || it == "female" || it == "mai" || it == "dob" || it == "card" || it == "uidai" || it == "government" || it == "india" }) {
+                return false
+            }
+        }
+
+        // In India, Aadhaar name is virtually always 2+ tokens (e.g. Given Name + Surname),
+        // or if single token, at least 4 letters and not an abbreviation.
+        if (words.size == 1) {
+            if (words[0].length <= 3) return false
+            if (AADHAAR_NON_NAME_WORDS.contains(words[0])) return false
+        }
 
         val letterCount = trimmed.count { it.isLetter() }
         return letterCount >= 3
@@ -580,20 +688,31 @@ object DocumentClassifier {
 
     private fun isValidLandPersonName(str: String): Boolean {
         val trimmed = str.trim()
-        if (trimmed.length < 2 || trimmed.length > 45) return false
+        if (trimmed.length < 3 || trimmed.length > 50) return false
         if (trimmed.contains("@") || trimmed.contains("http") || trimmed.contains(".com") || trimmed.contains(".gov")) return false
 
         val lower = trimmed.lowercase(java.util.Locale.ROOT)
         val tokens = lower.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) return false
 
         // If all tokens are purely land administrative keywords, reject
         if (tokens.all { LAND_ADMIN_KEYWORDS.contains(it) }) return false
 
-        // Reject if single token matches exact administrative header
-        if (tokens.size == 1 && LAND_ADMIN_KEYWORDS.contains(tokens.first())) return false
+        // Reject if single token matches administrative header or is too short
+        if (tokens.size == 1) {
+            val t = tokens.first()
+            if (LAND_ADMIN_KEYWORDS.contains(t) || t.length <= 3) return false
+        }
+
+        // Odia script names
+        val isOdia = OdiaTransliterationEngine.detectScript(trimmed) == ScriptType.ODIA
+        if (isOdia) {
+            val odiaLetterCount = trimmed.count { it in '\u0B00'..'\u0B7F' && it != '\u0B4D' }
+            if (odiaLetterCount < 3) return false
+        }
 
         val letterCount = trimmed.count { it.isLetter() }
-        return letterCount >= 2
+        return letterCount >= 3
     }
 
     fun extractPersonsFromAadhaar(text: String): List<Pair<String, ScriptType>> {

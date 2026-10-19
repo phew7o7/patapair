@@ -359,7 +359,26 @@ object DocumentOcrEngine {
 
             var rawBitmap: Bitmap? = null
             try {
-                rawBitmap = BitmapFactory.decodeStream(inputStream)
+                // Read bounds first to prevent OutOfMemoryError on 12-48MP smartphone photos
+                val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, boundsOptions)
+                }
+
+                var sampleSize = 1
+                val maxDim = maxOf(boundsOptions.outWidth, boundsOptions.outHeight)
+                while (maxDim / sampleSize > 2048) {
+                    sampleSize *= 2
+                }
+
+                val decodeOptions = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
+
+                rawBitmap = context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, decodeOptions)
+                }
             } catch (oom: OutOfMemoryError) {
                 return@withContext OcrResult(
                     fullText = "",
@@ -636,18 +655,12 @@ object DocumentOcrEngine {
         if (text.isBlank()) return false
         val lower = text.lowercase()
         val englishLandKeywords = listOf(
-            "record of rights", "khatiyan", "khata", "plot", "tahasil",
-            "mouza", "rayat", "pattadar", "bhulekh", "odisha", "district",
-            "kisam", "rakba", "government of odisha", "revenue", "department",
-            "settlement", "tenant", "area", "acres", "decimals", "chaka"
+            "record of rights", "khatiyan", "khata no", "plot no", "tahasil",
+            "mouza", "rayat", "pattadar", "bhulekh", "government of odisha",
+            "settlement officer", "kisam", "rakba"
         )
         val matchCount = englishLandKeywords.count { lower.contains(it) }
-        if (matchCount >= 2 || lower.contains("record of rights")) {
-            return true
-        }
-
-        val words = text.split(Regex("[^a-zA-Z]+")).filter { it.length >= 3 }
-        return words.size >= 8
+        return matchCount >= 3 || lower.contains("record of rights")
     }
 
     fun applyRotation(bitmap: Bitmap, degrees: Float): Bitmap {

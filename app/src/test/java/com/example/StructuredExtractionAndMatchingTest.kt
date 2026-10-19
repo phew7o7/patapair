@@ -219,8 +219,8 @@ class StructuredExtractionAndMatchingTest {
         assertFalse("AI-assisted score must NOT auto-approve without user confirmation", eval.isAutoApprovable)
         assertTrue("Must have supporting evidence for exact name match", eval.supportingEvidence.any { it.contains("Exact cross-script", ignoreCase = true) })
         assertTrue("Must have supporting evidence for surname match", eval.supportingEvidence.any { it.contains("surname", ignoreCase = true) })
-        assertTrue("Must have supporting evidence for father match", eval.supportingEvidence.any { it.contains("Father", ignoreCase = true) })
         assertTrue("Must have supporting evidence for Mouza location", eval.supportingEvidence.any { it.contains("Bhamarmal", ignoreCase = true) })
+        assertFalse("Father name must not be used as matching signal in simplified matcher", eval.supportingEvidence.any { it.contains("Father", ignoreCase = true) })
     }
 
     @Test
@@ -289,5 +289,82 @@ class StructuredExtractionAndMatchingTest {
 
         assertEquals("ବିଜୟ କୁମାର", finalRecord.originalName)
         assertTrue(finalRecord.isManuallyCorrected)
+    }
+
+    @Test
+    fun testSharedSurnameWithWeakGivenNameCandidateRejection() {
+        // Aadhaar: Suresh Mohapatra
+        // Land Record: Bijay Mohapatra
+        // Shared surname (Mohapatra) must NOT cause candidate to be suggested or auto-approved
+        val aadhaarSuresh = PersonRecord(
+            id = "p_aadhaar_suresh",
+            documentId = "d_a_suresh",
+            originalName = "Suresh Mohapatra",
+            script = ScriptType.LATIN,
+            transliteratedName = "Suresh Mohapatra",
+            normalizedName = OdiaTransliterationEngine.normalizeForMatching("Suresh Mohapatra")
+        )
+
+        val landBijay = PersonRecord(
+            id = "p_land_bijay",
+            documentId = "d_l_bijay",
+            originalName = "ବିଜୟ ମହାପାତ୍ର",
+            script = ScriptType.ODIA,
+            transliteratedName = "Bijay Mohapatra",
+            normalizedName = OdiaTransliterationEngine.normalizeForMatching("ବିଜୟ ମହାପାତ୍ର")
+        )
+
+        val eval = MatcherEngine.evaluateCandidate(
+            aadhaarPerson = aadhaarSuresh,
+            landPerson = landBijay,
+            aadhaarDoc = null,
+            landDoc = null,
+            hasMultipleCandidates = false
+        )
+
+        assertFalse("Must never auto-approve candidate with conflicting given names", eval.isAutoApprovable)
+        assertTrue("Conflicting evidence must flag given name discrepancy: ${eval.conflictingEvidence}",
+            eval.conflictingEvidence.any { it.contains("Different given names", ignoreCase = true) }
+        )
+        assertTrue("Score must be low (< 0.65) despite shared surname: got ${eval.score}", eval.score < 0.65f)
+
+        // Test in compareNames directly
+        val nameMatch = MatcherEngine.compareNames("Suresh Mohapatra", "ବିଜୟ ମହାପାତ୍ର")
+        assertFalse("Name match must not be auto-approvable", nameMatch.isAutoApprovable)
+        assertTrue("Score in compareNames must be < 0.65: got ${nameMatch.score}", nameMatch.score < 0.65f)
+    }
+
+    @Test
+    fun testDistinctSurnamesRoutrayAndRoutArePreserved() {
+        val normRoutray = OdiaTransliterationEngine.normalizeForMatching("Routray")
+        val normRout = OdiaTransliterationEngine.normalizeForMatching("Rout")
+        assertNotEquals("Routray and Rout are distinct Odia surnames and must not be collapsed", normRoutray, normRout)
+        assertTrue("normRoutray must end with routray: $normRoutray", normRoutray.contains("routray"))
+        assertTrue("normRout must end with rout: $normRout", normRout.contains("rout"))
+    }
+
+    @Test
+    fun testOdishaKhatiyanKhataAndPlotExtractionWithNewKeywords() {
+        val landText = """
+            ଓଡ଼ିଶା ସରକାର
+            ଖତିୟାନ ନଂ: ୪୨
+            ତହସିଲ୍: ଭୁବନେଶ୍ୱର
+            ମୌଜା: ପଟିଆ
+            ପ୍ଲଟ୍ ନମ୍ବର: ୩୧୨
+            ରୟତ: କୃଷ୍ଣଚନ୍ଦ୍ର ସ୍ୱାଇଁ ପିତା ହରିହର ସ୍ୱାଇଁ
+            ରକବା: ୦.୭୫ ଏକର
+            ସ୍ଥିତିବାନ ପ୍ରଜା
+        """.trimIndent()
+
+        val result = DocumentClassifier.classifyDocument(landText)
+        assertEquals(DocType.LAND_RECORD, result.docType)
+        assertEquals("42", result.khataNumber)
+        assertEquals("312", result.plotNumber)
+        assertEquals("ପଟିଆ", result.mouza)
+        assertFalse("Should extract persons", result.extractedPersons.isEmpty())
+        assertEquals("କୃଷ୍ଣଚନ୍ଦ୍ର ସ୍ୱାଇଁ", result.extractedPersons.first().first)
+        val details = result.extractedPersonDetails.firstOrNull()
+        assertNotNull(details)
+        assertEquals("ହରିହର ସ୍ୱାଇଁ", details?.fatherOrSpouseName)
     }
 }

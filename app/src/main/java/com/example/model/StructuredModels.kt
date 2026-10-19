@@ -123,9 +123,10 @@ data class MatchEvaluationResult(
 
 fun MatchPairRecord.getSupportingEvidence(): List<String> {
     val lines = matchExplanation.lines()
-    val supportingLine = lines.find { it.startsWith("Supporting:") }
+    val supportingLine = lines.find { it.startsWith("Supporting:") || it.startsWith("Supporting Signals:") }
     return if (supportingLine != null) {
-        supportingLine.removePrefix("Supporting:").split(";").map { it.trim() }.filter { it.isNotBlank() }
+        val content = supportingLine.substringAfter(":").trim()
+        content.split(";").map { it.trim() }.filter { it.isNotBlank() }
     } else {
         listOf("Phonetic cross-script alignment (${(matchConfidence * 100).toInt()}%)")
     }
@@ -133,10 +134,20 @@ fun MatchPairRecord.getSupportingEvidence(): List<String> {
 
 fun MatchPairRecord.getConflictingEvidence(): List<String> {
     val lines = matchExplanation.lines()
-    val conflictingLine = lines.find { it.startsWith("Caution / Conflicting:") }
+    val conflictingLine = lines.find {
+        it.startsWith("Caution / Conflicting:") ||
+        it.startsWith("Cautionary / Conflicting Signals:") ||
+        it.startsWith("Cautionary:")
+    }
     return if (conflictingLine != null) {
-        conflictingLine.removePrefix("Caution / Conflicting:").split(";").map { it.trim() }.filter { it.isNotBlank() }
+        val content = conflictingLine.substringAfter(":").trim()
+        content.split(";").map { it.trim() }.filter { it.isNotBlank() }
     } else emptyList()
+}
+
+fun MatchPairRecord.getLocationStatusNote(): String? {
+    val lines = matchExplanation.lines()
+    return lines.find { it.contains("Location: Unknown", ignoreCase = true) || it.contains("Location: Unavailable", ignoreCase = true) }
 }
 
 data class MatchingDiagnostics(
@@ -148,6 +159,7 @@ data class MatchingDiagnostics(
     val candidatesRejectedByFilters: Int = 0,
     val candidatesSuggested: Int = 0,
     val candidatesNeedsReview: Int = 0,
-    val candidatesVerified: Int = 0
+    val candidatesVerified: Int = 0,
+    val isEvaluatedCountEstimated: Boolean = false
 )
 

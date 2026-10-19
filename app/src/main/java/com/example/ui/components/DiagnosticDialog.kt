@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Warning
+import com.example.util.DocumentThumbnailView
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -187,6 +188,17 @@ fun DiagnosticDialog(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Visual Document Image Preview
+                DocumentThumbnailView(
+                    doc = document,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp),
+                    label = "Tap to enlarge"
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
